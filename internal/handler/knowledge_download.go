@@ -65,8 +65,11 @@ func (h *KnowledgeHandler) BatchDownloadKnowledge(c *gin.Context) {
 	}
 
 	kbID := c.Param("id")
+	// Read grant on the path library. Documents are then loaded by id and
+	// rejected unless their persisted knowledge_base_id is this library, so
+	// the client-supplied kb id cannot authorize another library's files.
 	grant, err := resolveHandlerKBAccessFor(
-		c, kbID, h.kbService, h.kbShareService, h.agentShareService, types.OrgRoleEditor,
+		c, kbID, h.kbService, h.kbShareService, h.agentShareService, types.OrgRoleViewer,
 	)
 	if err != nil {
 		_ = c.Error(err)
