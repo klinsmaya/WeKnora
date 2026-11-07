@@ -175,7 +175,8 @@ func (h *HousekeepingService) runSweep(ctx context.Context) {
 	// updated_at check — they have no heartbeat to consult.
 	// Include 'pending' so a task whose enqueue was lost is eventually
 	// recovered too; filterOutQueued below protects legitimately backlogged
-	// tasks. Include 'finalizing' alongside 'processing': finalizing rows still
+	// tasks. ParseStatusStored is intentionally absent: a file-only upload
+	// is a finished object, not a lost enqueue. Include 'finalizing' alongside 'processing': finalizing rows still
 	// consume LLM compute via enrichment subtasks (summary/question/graph),
 	// and the same stall modes (subtask worker dies, retry budget exhausted
 	// without decrementing the counter) leave the row hanging just as

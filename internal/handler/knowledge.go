@@ -291,9 +291,34 @@ func (h *KnowledgeHandler) enqueueKnowledgeListReparse(
 	return info.ID, nil
 }
 
+// fileOnlyUploadRequested reports whether this multipart upload must store the
+// original and skip document processing. Portal BFFs may send any one of the
+// accepted field names as a form field or query flag.
+func fileOnlyUploadRequested(c *gin.Context) bool {
+	for _, key := range []string{"file_only", "file-only", "skip_process"} {
+		if formFlagTrue(c, key) {
+			return true
+		}
+	}
+	return false
+}
+
+func formFlagTrue(c *gin.Context, key string) bool {
+	raw := strings.TrimSpace(c.PostForm(key))
+	if raw == "" {
+		raw = strings.TrimSpace(c.Query(key))
+	}
+	switch strings.ToLower(raw) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 // CreateKnowledgeFromFile godoc
 // @Summary      从文件创建知识
-// @Description  上传文件并创建知识条目
+// @Description  上传文件并创建知识。file_only 或 skip_process 为 true 时只存原件（parse_status=stored），不入队处理
 // @Tags         知识管理
 // @Accept       multipart/form-data
 // @Produce      json
@@ -302,6 +327,8 @@ func (h *KnowledgeHandler) enqueueKnowledgeListReparse(
 // @Param        fileName          formData  string  false  "自定义文件名"
 // @Param        metadata          formData  string  false  "元数据JSON"
 // @Param        enable_multimodel formData  bool    false  "启用多模态处理"
+// @Param        file_only         formData  bool    false  "只存储原件，不入队文档处理"
+// @Param        skip_process      formData  bool    false  "与 file_only 相同"
 // @Param        tag_ids       formData  string  false  "分类ID列表，逗号分隔"
 // @Param        process_config    formData  string  false  "处理配置JSON（KnowledgeProcessOverrides）"
 // @Success      200               {object}  handler.DataResponse{data=types.Knowledge}  "创建的知识"
@@ -416,6 +443,9 @@ func (h *KnowledgeHandler) CreateKnowledgeFromFile(c *gin.Context) {
 	tagIDs := parseCommaSeparatedTagIDs(c.PostForm("tag_ids"))
 
 	channel := c.PostForm("channel")
+	if fileOnlyUploadRequested(c) {
+		ctx = service.WithSkipDocumentProcess(ctx)
+	}
 
 	// Reject malformed .json at the HTTP boundary so users get 400 immediately.
 	// Kept out of CreateKnowledgeFromFile so datasource sync / IM keep creating
@@ -2036,7 +2066,7 @@ func (h *KnowledgeHandler) ClearKnowledgeBaseContents(c *gin.Context) {
 
 // DownloadKnowledgeFile godoc
 // @Summary      下载知识文件
-// @Description  下载知识条目关联的原始文件
+// @Description  下载原始文件。按所属知识库有效读鉴权（viewer 及以上）；服务端解析 kb，不走 preview
 // @Tags         知识管理
 // @Accept       json
 // @Produce      application/octet-stream
@@ -2058,10 +2088,12 @@ func (h *KnowledgeHandler) DownloadKnowledgeFile(c *gin.Context) {
 		return
 	}
 
-	// Keep a handler-level Editor check in addition to the route guard. The
-	// original file is more sensitive than parsed-content reads and must not
-	// be downloadable through a read-only organization share.
-	_, effCtx, err := h.resolveKnowledgeAndValidateKBAccess(c, id, types.OrgRoleEditor)
+	// Keep a handler-level read check in addition to the route guard. The
+	// knowledge id is resolved to its owning KB here; a client-supplied kb id
+	// is not an input. Effective read (viewer or higher, including an
+	// org-shared viewer) may download the original. Preview stays a separate
+	// route and is not a download bypass.
+	_, effCtx, err := h.resolveKnowledgeAndValidateKBAccess(c, id, types.OrgRoleViewer)
 	if err != nil {
 		c.Error(err)
 		return

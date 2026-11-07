@@ -116,7 +116,8 @@ func (s *createKnowledgeFileServiceStub) CopyFile(ctx context.Context, srcPath s
 }
 
 type createKnowledgeTaskEnqueuerStub struct {
-	calls int
+	calls     int
+	taskTypes []string
 }
 
 func (s *createKnowledgeTaskEnqueuerStub) Enqueue(
@@ -124,6 +125,9 @@ func (s *createKnowledgeTaskEnqueuerStub) Enqueue(
 	opts ...asynq.Option,
 ) (*asynq.TaskInfo, error) {
 	s.calls++
+	if task != nil {
+		s.taskTypes = append(s.taskTypes, task.Type())
+	}
 	return &asynq.TaskInfo{ID: "task-1", Queue: "default"}, nil
 }
 
@@ -189,7 +193,106 @@ func TestCreateKnowledgeFromFilePersistsStoredFilePathOnCreate(t *testing.T) {
 	require.Equal(t, 1, repo.createCalls)
 	require.NotNil(t, repo.createdKnowledge)
 	require.Equal(t, "stored/"+knowledge.ID, repo.createdKnowledge.FilePath)
+	require.Equal(t, types.ParseStatusPending, repo.createdKnowledge.ParseStatus)
 	require.Equal(t, 1, task.calls)
+	require.Equal(t, []string{types.TypeDocumentProcess}, task.taskTypes)
+}
+
+func TestCreateKnowledgeFromFileSkipProcessDoesNotEnqueueDocumentProcess(t *testing.T) {
+	t.Parallel()
+
+	repo := &createKnowledgeFileRepoStub{}
+	fileSvc := &createKnowledgeFileServiceStub{}
+	task := &createKnowledgeTaskEnqueuerStub{}
+	svc := &knowledgeService{
+		repo:      repo,
+		kbService: &createKnowledgeFileKBServiceStub{kb: &types.KnowledgeBase{ID: "kb-1"}},
+		fileSvc:   fileSvc,
+		task:      task,
+	}
+
+	knowledge, err := svc.CreateKnowledgeFromFile(
+		WithSkipDocumentProcess(newCreateKnowledgeFileContext()),
+		"kb-1",
+		newMultipartFileHeader(t, "sheet.csv", "a,b\n1,2\n"),
+		nil,
+		nil,
+		"",
+		nil,
+		"",
+		nil,
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, knowledge)
+	require.Equal(t, types.ParseStatusStored, knowledge.ParseStatus)
+	require.Equal(t, "disabled", knowledge.EnableStatus)
+	require.Equal(t, "stored/"+knowledge.ID, knowledge.FilePath)
+	require.Equal(t, types.ParseStatusStored, repo.createdKnowledge.ParseStatus)
+	require.False(t, isInFlightParseStatus(knowledge.ParseStatus))
+	require.Zero(t, task.calls)
+	require.NotContains(t, task.taskTypes, types.TypeDocumentProcess)
+	require.NotContains(t, task.taskTypes, types.TypeDataTableSummary)
+}
+
+func TestCreateKnowledgeFromFileSkipProcessStoresImageWithoutVLM(t *testing.T) {
+	t.Parallel()
+
+	repo := &createKnowledgeFileRepoStub{}
+	task := &createKnowledgeTaskEnqueuerStub{}
+	svc := &knowledgeService{
+		repo:      repo,
+		kbService: &createKnowledgeFileKBServiceStub{kb: &types.KnowledgeBase{ID: "kb-1"}},
+		fileSvc:   &createKnowledgeFileServiceStub{},
+		task:      task,
+	}
+
+	knowledge, err := svc.CreateKnowledgeFromFile(
+		WithSkipDocumentProcess(newCreateKnowledgeFileContext()),
+		"kb-1",
+		newMultipartFileHeader(t, "photo.png", "png-bytes"),
+		nil,
+		nil,
+		"",
+		nil,
+		"",
+		nil,
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, types.ParseStatusStored, knowledge.ParseStatus)
+	require.Zero(t, task.calls)
+	require.Equal(t, 1, repo.createCalls)
+}
+
+func TestCreateKnowledgeFromFileStillRequiresVLMWhenProcessingImages(t *testing.T) {
+	t.Parallel()
+
+	repo := &createKnowledgeFileRepoStub{}
+	task := &createKnowledgeTaskEnqueuerStub{}
+	svc := &knowledgeService{
+		repo:      repo,
+		kbService: &createKnowledgeFileKBServiceStub{kb: &types.KnowledgeBase{ID: "kb-1"}},
+		fileSvc:   &createKnowledgeFileServiceStub{},
+		task:      task,
+	}
+
+	knowledge, err := svc.CreateKnowledgeFromFile(
+		newCreateKnowledgeFileContext(),
+		"kb-1",
+		newMultipartFileHeader(t, "photo.png", "png-bytes"),
+		nil,
+		nil,
+		"",
+		nil,
+		"",
+		nil,
+	)
+
+	require.Error(t, err)
+	require.Nil(t, knowledge)
+	require.Zero(t, repo.createCalls)
+	require.Zero(t, task.calls)
 }
 
 // Datasource sync deletes the previous knowledge for an external_id before
