@@ -23,6 +23,27 @@ import (
 	"github.com/hibiken/asynq"
 )
 
+type skipDocumentProcessKey struct{}
+
+// WithSkipDocumentProcess marks a file upload as file-only. The object and
+// knowledge metadata are stored with ParseStatusStored, and TypeDocumentProcess
+// (including the spreadsheet summary task) is not enqueued. Callers that omit
+// the flag keep the default parse pipeline.
+func WithSkipDocumentProcess(ctx context.Context) context.Context {
+	return context.WithValue(ctx, skipDocumentProcessKey{}, true)
+}
+
+func skipDocumentProcess(ctx context.Context) bool {
+	return SkipDocumentProcessFromContext(ctx)
+}
+
+// SkipDocumentProcessFromContext reports whether WithSkipDocumentProcess marked
+// this upload. HTTP tests use it to prove the request flag reached the service.
+func SkipDocumentProcessFromContext(ctx context.Context) bool {
+	enabled, _ := ctx.Value(skipDocumentProcessKey{}).(bool)
+	return enabled
+}
+
 // CreateKnowledgeFromFile creates a knowledge entry from an uploaded file
 func (s *knowledgeService) CreateKnowledgeFromFile(ctx context.Context,
 	kbID string, file *multipart.FileHeader, metadata map[string]string, enableMultimodel *bool,
@@ -169,17 +190,35 @@ func (s *knowledgeService) createKnowledgeFromFile(ctx context.Context,
 		folderPath = types.NormalizeKnowledgeFolderPath(safeFolderPath)
 	}
 
-	eff, err := resolveFileImportProcessConfig(ctx, kb, getFileType(safeFilename), processOverrides, enableMultimodel)
-	if err != nil {
-		return nil, err
+	fileOnly := skipDocumentProcess(ctx)
+	var eff types.EffectiveProcessConfig
+	if fileOnly {
+		// Store the original without parser prerequisites (VLM/ASR). The
+		// extension gate above already rejected unsupported types.
+		if err := validateImportFileType(getFileType(safeFilename)); err != nil {
+			logger.Errorf(ctx, "Invalid file type for file-only upload: %v", err)
+			return nil, err
+		}
+	} else {
+		resolved, err := resolveFileImportProcessConfig(
+			ctx, kb, getFileType(safeFilename), processOverrides, enableMultimodel,
+		)
+		if err != nil {
+			return nil, err
+		}
+		eff = resolved
 	}
 
 	// Prepare knowledge record
 	logger.Info(ctx, "Preparing knowledge record")
+	parseStatus := types.ParseStatusPending
+	if fileOnly {
+		parseStatus = types.ParseStatusStored
+	}
 	knowledge := &types.Knowledge{
 		ID:               uuid.New().String(),
-		TenantID:         tenantID,
 		KnowledgeBaseID:  kbID,
+		TenantID:         tenantID,
 		Type:             "file",
 		Channel:          defaultChannel(channel),
 		Title:            safeFilename,
@@ -188,7 +227,7 @@ func (s *knowledgeService) createKnowledgeFromFile(ctx context.Context,
 		FileType:         getFileType(safeFilename),
 		FileSize:         file.Size,
 		FileHash:         hash,
-		ParseStatus:      "pending",
+		ParseStatus:      parseStatus,
 		EnableStatus:     "disabled",
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
@@ -229,6 +268,16 @@ func (s *knowledgeService) createKnowledgeFromFile(ctx context.Context,
 	if err := s.attachCreationTags(ctx, knowledge, tagIDs, replacement); err != nil {
 		logger.Errorf(ctx, "Failed to set knowledge tags, knowledge ID: %s, error: %v", knowledge.ID, err)
 		return nil, err
+	}
+
+	if fileOnly {
+		recordKBActivity(ctx, s.audit, knowledge.TenantID, kbID, types.AuditActionKnowledgeCreated,
+			"knowledge", knowledge.ID, types.AuditOutcomeSuccess, map[string]any{
+				"title": knowledge.Title, "source_type": "file", "file_type": knowledge.FileType,
+				"processing_status": types.ParseStatusStored, "skip_process": true,
+			})
+		logger.Infof(ctx, "Stored file-only knowledge without document processing, ID: %s", knowledge.ID)
+		return knowledge, nil
 	}
 
 	// Enqueue document processing task to Asynq
