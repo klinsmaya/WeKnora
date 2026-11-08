@@ -251,7 +251,7 @@ func TestGetPageBacklinkTitlesThroughRepository(t *testing.T) {
 		"deleted", "kb-1", "deleted", "Deleted title").Error)
 	repo := repository.NewWikiPageRepository(db)
 	h := &WikiPageHandler{
-		wikiService: service.NewWikiPageService(repo, nil, nil, nil, nil, nil),
+		wikiService: service.NewWikiPageService(repo, nil, nil, nil, nil, nil, nil),
 		kbService:   fakeWikiPageTitlesKBService{},
 	}
 	rec := httptest.NewRecorder()

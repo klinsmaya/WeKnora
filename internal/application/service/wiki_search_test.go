@@ -66,7 +66,7 @@ func setupWikiSearchService(
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&types.WikiFolder{}, &types.WikiPage{}, &types.WikiPageRevision{}))
 	repo := repository.NewWikiPageRepository(db)
-	svc := NewWikiPageService(repo, nil, &wikiSearchKBService{byID: kbs}, nil, nil, share)
+	svc := NewWikiPageService(repo, nil, &wikiSearchKBService{byID: kbs}, nil, nil, share, nil)
 	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(1))
 	return ctx, svc, repo
 }

@@ -221,7 +221,7 @@ func newWikiPageRetryReducerWithDB(
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	require.NoError(t, db.AutoMigrate(&types.WikiFolder{}, &types.WikiPage{}, &types.WikiPageRevision{}))
-	service := NewWikiPageService(apprepo.NewWikiPageRepository(db), nil, nil, nil, nil, nil)
+	service := NewWikiPageService(apprepo.NewWikiPageRepository(db), nil, nil, nil, nil, nil, nil)
 	// 每轮使用独立数据库并关闭连接，重复 race 测试不会复用上轮页面。
 	_, err = service.CreatePage(context.Background(), &types.WikiPage{
 		TenantID: 1, KnowledgeBaseID: "kb-row-guard", Slug: "entity/alpha",
@@ -403,7 +403,7 @@ func newWikiPageRetryBatch(
 	kb.TenantID = 7
 	kb.WikiConfig = &types.WikiConfig{IngestMapParallel: 1, IngestReduceParallel: 2}
 	require.NoError(t, db.Create(kb).Error)
-	pageSvc := NewWikiPageService(apprepo.NewWikiPageRepository(db), nil, nil, nil, nil, nil)
+	pageSvc := NewWikiPageService(apprepo.NewWikiPageRepository(db), nil, nil, nil, nil, nil, nil)
 	for _, name := range []string{"alpha", "beta"} {
 		_, err := pageSvc.CreatePage(context.Background(), &types.WikiPage{
 			TenantID: 7, KnowledgeBaseID: "kb-1", Slug: "entity/" + name,

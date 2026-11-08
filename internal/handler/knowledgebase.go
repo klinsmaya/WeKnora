@@ -38,6 +38,7 @@ type KnowledgeBaseHandler struct {
 	knowledgeService   interfaces.KnowledgeService
 	kbShareService     interfaces.KBShareService
 	agentShareService  interfaces.AgentShareService
+	userKBGrants       access.UserKBGrantLookup
 	asynqClient        interfaces.TaskEnqueuer
 	vectorStoreService interfaces.VectorStoreService // enriches KB responses with bound store display
 	// userService 仅在 list 类接口里用于批量回填 creator_name；
@@ -63,6 +64,7 @@ func NewKnowledgeBaseHandler(
 	fileService interfaces.FileService,
 	storageResolver interfaces.StorageBackendResolver,
 	profileService interfaces.KnowledgeBaseProfileService,
+	userKBGrants access.UserKBGrantLookup,
 ) *KnowledgeBaseHandler {
 	return &KnowledgeBaseHandler{
 		cfg:                cfg,
@@ -76,6 +78,7 @@ func NewKnowledgeBaseHandler(
 		userService:        userService,
 		fileService:        fileService,
 		storageResolver:    storageResolver,
+		userKBGrants:       userKBGrants,
 	}
 }
 
@@ -556,7 +559,7 @@ func (h *KnowledgeBaseHandler) validateAndGetKnowledgeBase(
 	c *gin.Context,
 ) (*types.KnowledgeBase, string, uint64, types.OrgMemberRole, error) {
 	id := secutils.SanitizeForLog(c.Param("id"))
-	grant, err := resolveHandlerKBAccess(c, id, h.service, h.kbShareService, h.agentShareService)
+	grant, err := resolveHandlerKBAccess(c, id, h.service, h.kbShareService, h.agentShareService, h.userKBGrants)
 	if err != nil {
 		return nil, id, 0, "", err
 	}
@@ -1494,7 +1497,7 @@ func (h *KnowledgeBaseHandler) CopyKnowledgeBase(c *gin.Context) {
 		return
 	}
 	tenantID := caller.TenantID
-	sourceGrant, err := resolveHandlerKBAccessFor(c, req.SourceID, h.service, nil, nil, types.OrgRoleViewer)
+	sourceGrant, err := resolveHandlerKBAccessFor(c, req.SourceID, h.service, nil, nil, nil, types.OrgRoleViewer)
 	if err != nil {
 		c.Error(err)
 		return
@@ -1518,7 +1521,7 @@ func (h *KnowledgeBaseHandler) CopyKnowledgeBase(c *gin.Context) {
 			targetKB.CreatorID = caller.UserID
 		}
 	} else {
-		targetGrant, err := resolveHandlerKBAccessFor(c, req.TargetID, h.service, nil, nil, types.OrgRoleEditor)
+		targetGrant, err := resolveHandlerKBAccessFor(c, req.TargetID, h.service, nil, nil, nil, types.OrgRoleEditor)
 		if err != nil {
 			_ = c.Error(err)
 			return

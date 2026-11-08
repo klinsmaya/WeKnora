@@ -78,7 +78,7 @@ func newIMResourceStorageFixture(t *testing.T) *imResourceStorageFixture {
 		tenant:  &types.Tenant{ID: 7}, baseURL: server.URL,
 	}
 	f.shares = appsvc.NewKBShareService(repository.NewKBShareRepository(db),
-		repository.NewOrganizationRepository(db), repository.NewKnowledgeBaseRepository(db), nil, nil, nil)
+		repository.NewOrganizationRepository(db), repository.NewKnowledgeBaseRepository(db), nil, nil, nil, nil)
 	require.NoError(t, db.Create(&types.Organization{ID: "org", Name: "Shared workspace", OwnerTenantID: 9}).Error)
 	for _, id := range []uint64{7, 9} {
 		require.NoError(t, db.Create(&types.OrganizationTenantMember{

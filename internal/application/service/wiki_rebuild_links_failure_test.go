@@ -30,7 +30,7 @@ func newRebuildLinksWiki(
 
 	ctx := context.Background()
 	repo := repository.NewWikiPageRepository(db)
-	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil)
+	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil, nil)
 
 	now := time.Now()
 	for _, page := range []*types.WikiPage{

@@ -33,7 +33,7 @@ func (s *knowledgeService) ListFAQEntries(ctx context.Context,
 		return nil, err
 	}
 
-	effectiveTenantID, err := resolveKBReadTenant(ctx, kb, s.kbShareService)
+	effectiveTenantID, err := resolveKBReadTenant(ctx, kb, s.kbShareService, s.userKBGrants)
 	if err != nil {
 		return nil, err
 	}

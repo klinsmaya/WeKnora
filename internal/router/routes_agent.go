@@ -416,3 +416,15 @@ func embedFrameAncestorsMiddleware(svc interfaces.EmbedChannelService) gin.Handl
 		c.Next()
 	}
 }
+
+func RegisterKBUserGrantRoutes(r *gin.RouterGroup, grantHandler *handler.KBUserGrantHandler, g *rbacGuards) {
+	if grantHandler == nil {
+		return
+	}
+	kbGrants := g.apiKeyGroup(r.Group("/knowledge-bases/:id/grants"), apiKeyFullAccess())
+	kbGrants.PUT("/:user_id/sources/:source", g.OwnedKBOrAdmin(), grantHandler.Upsert)
+	kbGrants.DELETE("/:user_id/sources/:source", g.OwnedKBOrAdmin(), grantHandler.Revoke)
+	kbGrants.PUT("/:user_id", g.OwnedKBOrAdmin(), grantHandler.Upsert)
+	kbGrants.GET("", g.OwnedKBOrAdmin(), grantHandler.List)
+	kbGrants.DELETE("/:user_id", g.OwnedKBOrAdmin(), grantHandler.Revoke)
+}

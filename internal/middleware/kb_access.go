@@ -187,6 +187,7 @@ func RequireKBAccess(
 	kbService KBLookup,
 	kbShareService interfaces.KBShareService,
 	agentShareService interfaces.AgentShareService,
+	grants access.UserKBGrantLookup,
 	cfg *config.Config,
 ) gin.HandlerFunc {
 	warnOnNilConfig(cfg)
@@ -205,7 +206,7 @@ func RequireKBAccess(
 			return
 		}
 
-		grant, err := resolveKBAccess(ctx, c, kbID, requiredPermission, kbService, kbShareService, agentShareService)
+		grant, err := resolveKBAccess(ctx, c, kbID, requiredPermission, kbService, kbShareService, agentShareService, grants)
 		switch {
 		case stderrors.Is(err, access.ErrUnauthorized):
 			_ = c.Error(apperrors.NewUnauthorizedError("Unauthorized"))
@@ -274,6 +275,7 @@ func resolveKBAccess(
 	kbService KBLookup,
 	kbShareService interfaces.KBShareService,
 	agentShareService interfaces.AgentShareService,
+	grants access.UserKBGrantLookup,
 ) (*KBAccess, error) {
 	request := KBAccessRequest(c)
 	if request.Caller.TenantID == 0 {
@@ -286,5 +288,5 @@ func resolveKBAccess(
 		}
 		return nil, err
 	}
-	return access.ResolveKB(ctx, request, kb, requiredPermission, kbShareService, agentShareService)
+	return access.ResolveKB(ctx, request, kb, requiredPermission, kbShareService, agentShareService, grants)
 }

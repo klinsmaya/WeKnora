@@ -77,6 +77,7 @@ func TestKBGuardAndHandlersShareResolution(t *testing.T) {
 				svc,
 				shares,
 				nil,
+				nil,
 				&config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}},
 			), func(c *gin.Context) {
 				_, _, effective, permission, err := kbHandler.validateAndGetKnowledgeBase(c)
@@ -129,7 +130,7 @@ func TestKBHandlerDoesNotReuseGrantForAnotherResourceOrCaller(t *testing.T) {
 			svc := &stubKBOnlyService{getByID: func(context.Context, string) (*types.KnowledgeBase, error) {
 				return &types.KnowledgeBase{ID: tt.requestedID, TenantID: 2}, nil
 			}}
-			_, err := resolveHandlerKBAccess(c, tt.requestedID, svc, nil, nil)
+			_, err := resolveHandlerKBAccess(c, tt.requestedID, svc, nil, nil, nil)
 			require.Error(t, err)
 		})
 	}
@@ -150,7 +151,7 @@ func TestKBHandlerAPIKeyScopeStillAppliesToCachedGrant(t *testing.T) {
 			Role:     types.TenantRoleViewer,
 		}, EffectiveTenantID: 1, Permission: types.OrgRoleAdmin,
 	})
-	_, err := resolveHandlerKBAccess(c, "kb", nil, nil, nil)
+	_, err := resolveHandlerKBAccess(c, "kb", nil, nil, nil, nil)
 	require.Error(t, err)
 }
 
@@ -218,8 +219,8 @@ func TestKBHandlerEnforcesAccessWhenRouteRBACIsDisabled(t *testing.T) {
 	})
 	disabled := false
 	r.GET("/:id", middleware.RequireKBAccess(middleware.KBIDFromParam("id"), types.OrgRoleViewer,
-		svc, nil, nil, &config.Config{Tenant: &config.TenantConfig{EnableRBAC: &disabled}}), func(c *gin.Context) {
-		_, err := resolveHandlerKBAccess(c, c.Param("id"), svc, nil, nil)
+		svc, nil, nil, nil, &config.Config{Tenant: &config.TenantConfig{EnableRBAC: &disabled}}), func(c *gin.Context) {
+		_, err := resolveHandlerKBAccess(c, c.Param("id"), svc, nil, nil, nil)
 		require.Error(t, err)
 		_ = c.Error(err)
 	})

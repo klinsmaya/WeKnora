@@ -40,6 +40,8 @@ import (
 	"github.com/Tencent/WeKnora/internal/agent/hitl"
 	"github.com/Tencent/WeKnora/internal/agent/operations"
 	"github.com/Tencent/WeKnora/internal/agent/tools"
+	"github.com/Tencent/WeKnora/internal/application/access"
+	"github.com/Tencent/WeKnora/internal/application/kbusergrant"
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	dorisRepo "github.com/Tencent/WeKnora/internal/application/repository/retriever/doris"
 	elasticsearchRepoV7 "github.com/Tencent/WeKnora/internal/application/repository/retriever/elasticsearch/v7"
@@ -268,6 +270,15 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewKnowledgeBaseService))
 	must(container.Provide(service.NewGraphSearchService))
 	must(container.Provide(service.NewOrganizationService))
+	must(container.Provide(func(
+		db *gorm.DB,
+		kbs interfaces.KnowledgeBaseRepository,
+		users interfaces.UserService,
+	) *kbusergrant.Service {
+		return kbusergrant.NewService(db, kbs, users)
+	}))
+	must(container.Provide(func(s *kbusergrant.Service) access.UserKBGrantLookup { return s }))
+	must(container.Provide(func(s *kbusergrant.Service) service.PersonalKBCards { return s }))
 	must(
 		container.Provide(service.NewKBShareService),
 	) // KBShareService must be registered before KnowledgeService and KnowledgeTagService
@@ -692,6 +703,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewKnowledgeBaseHandler))
 	must(container.Provide(handler.NewGraphSearchHandler))
 	must(container.Provide(handler.NewKnowledgeHandler))
+	must(container.Provide(handler.NewKBUserGrantHandler))
 	must(container.Provide(handler.NewChunkHandler))
 	must(container.Provide(handler.NewFAQHandler))
 	must(container.Provide(handler.NewTagHandler))

@@ -66,7 +66,7 @@ func TestKnowledgeBaseUpdateSettingsAccess(t *testing.T) {
 						handle = h.PatchKnowledgeBase
 					}
 					r.Handle(method, "/:id", middleware.RequireKBAccess(
-						middleware.KBIDFromParam("id"), types.OrgRoleEditor, svc, shares, nil,
+						middleware.KBIDFromParam("id"), types.OrgRoleEditor, svc, shares, nil, nil,
 						&config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}},
 					), handle)
 					body := map[string]any{"name": "renamed"}

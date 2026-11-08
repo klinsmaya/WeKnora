@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Tencent/WeKnora/internal/application/access"
 	"github.com/Tencent/WeKnora/internal/application/service/retriever"
 	werrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/logger"
@@ -29,6 +30,7 @@ type knowledgeTagService struct {
 	modelService   interfaces.ModelService
 	task           interfaces.TaskEnqueuer
 	kbShareService interfaces.KBShareService
+	userKBGrants   access.UserKBGrantLookup
 	tenantRepo     interfaces.TenantRepository
 	audit          interfaces.AuditLogService
 }
@@ -46,6 +48,7 @@ func NewKnowledgeTagService(
 	kbShareService interfaces.KBShareService,
 	tenantRepo interfaces.TenantRepository,
 	audit interfaces.AuditLogService,
+	userKBGrants access.UserKBGrantLookup,
 ) (interfaces.KnowledgeTagService, error) {
 	return &knowledgeTagService{
 		kbService:      kbService,
@@ -57,6 +60,7 @@ func NewKnowledgeTagService(
 		modelService:   modelService,
 		task:           task,
 		kbShareService: kbShareService,
+		userKBGrants:   userKBGrants,
 		tenantRepo:     tenantRepo,
 		audit:          audit,
 	}, nil
@@ -82,7 +86,7 @@ func (s *knowledgeTagService) ListTags(
 		return nil, err
 	}
 
-	effectiveTenantID, err := resolveKBReadTenant(ctx, kb, s.kbShareService)
+	effectiveTenantID, err := resolveKBReadTenant(ctx, kb, s.kbShareService, s.userKBGrants)
 	if err != nil {
 		return nil, err
 	}

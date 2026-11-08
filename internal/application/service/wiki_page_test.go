@@ -23,7 +23,7 @@ func TestPruneEmptyFolderChainsDeletesOnlyEmptyCandidateAncestors(t *testing.T) 
 
 	ctx := context.Background()
 	repo := repository.NewWikiPageRepository(db)
-	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil)
+	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil, nil)
 	now := time.Now()
 	createFolder := func(id, parentID, name, path string, depth int) {
 		require.NoError(t, repo.CreateFolder(ctx, &types.WikiFolder{
@@ -79,7 +79,7 @@ func TestUpdateWikiPagePersistsAndClearsAliases(t *testing.T) {
 
 	ctx := context.Background()
 	repo := repository.NewWikiPageRepository(db)
-	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil)
+	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil, nil)
 	page, err := svc.CreatePage(ctx, &types.WikiPage{
 		TenantID: 1, KnowledgeBaseID: "kb-alias", Slug: "concept/alias",
 		Title: "Alias", Summary: "summary", Content: "content",
@@ -182,7 +182,7 @@ func TestRepairContentLinks(t *testing.T) {
 
 	ctx := context.Background()
 	repo := repository.NewWikiPageRepository(db)
-	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil)
+	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil, nil)
 	const kbID = "kb-repair"
 	now := time.Now()
 
@@ -772,7 +772,7 @@ func TestFindPagesByNormalizedTitleMatchesWhitespace(t *testing.T) {
 
 	ctx := context.Background()
 	repo := repository.NewWikiPageRepository(db)
-	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil)
+	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil, nil)
 	now := time.Now()
 	require.NoError(t, repo.Create(ctx, &types.WikiPage{
 		ID: "page-kong", TenantID: 1, KnowledgeBaseID: "kb-id", Slug: "entity/confucius",
@@ -830,7 +830,7 @@ func TestMovePageIntoTypeLabelNamedFolderKeepsHierarchy(t *testing.T) {
 
 	ctx := context.Background()
 	repo := repository.NewWikiPageRepository(db)
-	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil)
+	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil, nil)
 	now := time.Now()
 
 	folder, err := svc.CreateFolder(ctx, "kb-move", 1, types.WikiFolderRootID, "概念")

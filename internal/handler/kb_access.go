@@ -26,13 +26,14 @@ func resolvedKBAccess(c *gin.Context, kbID string, required types.OrgMemberRole)
 // resolve a single KB in route middleware. It always enforces access, preserving
 // the handler checks even when the middleware's RBAC rollout flag is disabled.
 func resolveHandlerKBAccess(c *gin.Context, kbID string, kbService middleware.KBLookup,
-	shares interfaces.KBShareService, agents interfaces.AgentShareService,
+	shares interfaces.KBShareService, agents interfaces.AgentShareService, grants access.UserKBGrantLookup,
 ) (*access.KBAccess, error) {
-	return resolveHandlerKBAccessFor(c, kbID, kbService, shares, agents, types.OrgRoleViewer)
+	return resolveHandlerKBAccessFor(c, kbID, kbService, shares, agents, grants, types.OrgRoleViewer)
 }
 
 func resolveHandlerKBAccessFor(c *gin.Context, kbID string, kbService middleware.KBLookup,
-	shares interfaces.KBShareService, agents interfaces.AgentShareService, required types.OrgMemberRole,
+	shares interfaces.KBShareService, agents interfaces.AgentShareService, grants access.UserKBGrantLookup,
+	required types.OrgMemberRole,
 ) (*access.KBAccess, error) {
 	ctx := c.Request.Context()
 	request := middleware.KBAccessRequest(c)
@@ -56,7 +57,7 @@ func resolveHandlerKBAccessFor(c *gin.Context, kbID string, kbService middleware
 		logger.ErrorWithFields(ctx, err, nil)
 		return nil, apperrors.NewInternalServerError(err.Error())
 	}
-	grant, err := access.ResolveKB(ctx, request, kb, required, shares, agents)
+	grant, err := access.ResolveKB(ctx, request, kb, required, shares, agents, grants)
 	if err == nil {
 		// Preserve authorization for body-based routes without changing the
 		// execution tenant until the handler performs its resource operation.

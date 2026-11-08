@@ -72,7 +72,7 @@ func (s *Server) resolveKB(
 	ctx context.Context, kb *types.KnowledgeBase, required types.OrgMemberRole,
 ) (*access.KBAccess, error) {
 	request := access.KBRequest{Caller: types.CallerFromContext(ctx)}
-	return access.ResolveKB(ctx, request, kb, required, s.kbShareService, nil)
+	return access.ResolveKB(ctx, request, kb, required, s.kbShareService, nil, s.userKBGrants)
 }
 
 // scopedKBContext authorizes one knowledge base at the required permission
