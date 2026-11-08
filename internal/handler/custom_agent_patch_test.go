@@ -50,7 +50,7 @@ func servePatchWith(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	h.service = service.NewCustomAgentService(repo, nil, nil, nil, nil, nil, nil, nil)
+	h.service = service.NewCustomAgentService(repo, nil, nil, nil, nil, nil, nil, nil, nil)
 	router := gin.New()
 	router.Use(middleware.ErrorHandler())
 	router.PATCH("/agents/:id", h.PatchAgent)

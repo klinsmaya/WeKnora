@@ -53,7 +53,7 @@ func registerOperationAreas(v1 *gin.RouterGroup, g *rbacGuards) {
 func TestBuiltinOperationsMatchRegisteredRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	g := newRBACGuards(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	g := newRBACGuards(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	registerOperationAreas(engine.Group("/api/v1"), g)
 
 	if missing := missingOperationRoutes(engine, operations.Builtin()); len(missing) > 0 {

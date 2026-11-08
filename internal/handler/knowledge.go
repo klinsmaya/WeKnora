@@ -41,6 +41,7 @@ type KnowledgeHandler struct {
 	asynqClient       interfaces.TaskEnqueuer
 	spanRepo          repository.KnowledgeSpanRepository
 	backlog           backlogProbe
+	userKBGrants      access.UserKBGrantLookup
 }
 
 // backlogProbe tells a backlogged document (work still queued) from a stuck
@@ -97,6 +98,7 @@ func NewKnowledgeHandler(
 	asynqClient interfaces.TaskEnqueuer,
 	spanRepo repository.KnowledgeSpanRepository,
 	housekeeping *service.HousekeepingService,
+	userKBGrants access.UserKBGrantLookup,
 ) *KnowledgeHandler {
 	var backlog backlogProbe
 	if housekeeping != nil {
@@ -114,6 +116,7 @@ func NewKnowledgeHandler(
 		userSvc:           userSvc,
 		asynqClient:       asynqClient,
 		spanRepo:          spanRepo,
+		userKBGrants:      userKBGrants,
 	}
 }
 
@@ -156,7 +159,7 @@ func (h *KnowledgeHandler) validateKnowledgeBaseAccessWithKBID(
 	kbID string,
 ) (*types.KnowledgeBase, string, uint64, types.OrgMemberRole, error) {
 	kbID = secutils.SanitizeForLog(kbID)
-	grant, err := resolveHandlerKBAccess(c, kbID, h.kbService, h.kbShareService, h.agentShareService)
+	grant, err := resolveHandlerKBAccess(c, kbID, h.kbService, h.kbShareService, h.agentShareService, h.userKBGrants)
 	if err != nil {
 		return nil, kbID, 0, "", err
 	}
@@ -173,6 +176,7 @@ func (h *KnowledgeHandler) validateKnowledgeBaseWriteAccessWithKBID(
 		h.kbService,
 		h.kbShareService,
 		h.agentShareService,
+		h.userKBGrants,
 		types.OrgRoleEditor,
 	)
 	if err != nil {
@@ -211,7 +215,7 @@ func (h *KnowledgeHandler) resolveKnowledgeAndValidateKBAccess(
 		return knowledge, grant.Context(ctx), nil
 	}
 	kb := &types.KnowledgeBase{ID: knowledge.KnowledgeBaseID, TenantID: knowledge.TenantID}
-	grant, err := access.ResolveKB(ctx, request, kb, requiredPermission, h.kbShareService, h.agentShareService)
+	grant, err := access.ResolveKB(ctx, request, kb, requiredPermission, h.kbShareService, h.agentShareService, h.userKBGrants)
 	if goerrors.Is(err, access.ErrForbidden) {
 		return nil, ctx, errors.NewForbiddenError("Permission denied to access this knowledge")
 	}
@@ -3153,11 +3157,11 @@ func (h *KnowledgeHandler) MoveKnowledge(c *gin.Context) {
 	}
 
 	// Resolve explicit write grants independently for both body IDs.
-	if _, err := resolveHandlerKBAccessFor(c, req.SourceKBID, h.kbService, nil, nil, types.OrgRoleEditor); err != nil {
+	if _, err := resolveHandlerKBAccessFor(c, req.SourceKBID, h.kbService, nil, nil, nil, types.OrgRoleEditor); err != nil {
 		_ = c.Error(err)
 		return
 	}
-	if _, err := resolveHandlerKBAccessFor(c, req.TargetKBID, h.kbService, nil, nil, types.OrgRoleEditor); err != nil {
+	if _, err := resolveHandlerKBAccessFor(c, req.TargetKBID, h.kbService, nil, nil, nil, types.OrgRoleEditor); err != nil {
 		_ = c.Error(err)
 		return
 	}

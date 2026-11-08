@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Tencent/WeKnora/internal/application/access"
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/application/service/retriever"
 	"github.com/Tencent/WeKnora/internal/config"
@@ -69,6 +70,7 @@ type knowledgeService struct {
 	graphEngine     interfaces.RetrieveGraphRepository
 	redisClient     *redis.Client
 	kbShareService  interfaces.KBShareService
+	userKBGrants    access.UserKBGrantLookup
 	imageResolver   *docparser.ImageResolver
 	taskPendingRepo interfaces.TaskPendingOpsRepository
 
@@ -121,6 +123,7 @@ func NewKnowledgeService(
 	taskPendingRepo interfaces.TaskPendingOpsRepository,
 	spanTracker SpanTracker,
 	audit interfaces.AuditLogService,
+	userKBGrants access.UserKBGrantLookup,
 ) (interfaces.KnowledgeService, error) {
 	return &knowledgeService{
 		config:          config,
@@ -144,6 +147,7 @@ func NewKnowledgeService(
 		ownership:       ownership,
 		redisClient:     redisClient,
 		kbShareService:  kbShareService,
+		userKBGrants:    userKBGrants,
 		imageResolver:   imageResolver,
 		wikiRepo:        wikiRepo,
 		wikiService:     wikiService,
@@ -921,7 +925,7 @@ func (s *knowledgeService) GetKnowledgeBatchWithSharedAccess(ctx context.Context
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	permissions := kbReadPermissions(ctx, s.kbShareService)
+	permissions := kbReadPermissions(ctx, s.kbShareService, s.userKBGrants)
 	rows, err := s.repo.GetKnowledgeBatch(ctx, tenantID, ids)
 	if err != nil {
 		return nil, err

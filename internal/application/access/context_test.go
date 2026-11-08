@@ -25,6 +25,7 @@ func TestKBGrantSurvivesExecutionSwitchAndDetachWithoutWidening(t *testing.T) {
 		types.OrgRoleViewer,
 		&shareLookup{permission: types.OrgRoleViewer},
 		nil,
+		nil,
 	)
 	require.NoError(t, err)
 	ctx = grant.Context(ctx)
@@ -71,13 +72,13 @@ func TestKBGrantSurvivesExecutionSwitchAndDetachWithoutWidening(t *testing.T) {
 func TestExecutionTenantDoesNotGrantOwnershipOrChangeShareIdentity(t *testing.T) {
 	ctx := types.WithExecutionTenant(callerContext(), 2)
 	shares := &shareLookup{}
-	allowed, err := NewKBPermissions(ctx, shares).Check("private", 2, types.OrgRoleViewer)
+	allowed, err := NewKBPermissions(ctx, shares, nil).Check("private", 2, types.OrgRoleViewer)
 	require.NoError(t, err)
 	require.False(t, allowed)
 	require.Equal(t, uint64(1), shares.caller)
 	require.Equal(t, types.TenantRoleContributor, shares.role)
 	ctx = types.WithExecutionTenant(context.Background(), 2)
-	allowed, err = NewKBPermissions(ctx, nil).Check("private", 2, types.OrgRoleViewer)
+	allowed, err = NewKBPermissions(ctx, nil, nil).Check("private", 2, types.OrgRoleViewer)
 	require.NoError(t, err)
 	require.False(t, allowed, "an absent caller must not become the execution tenant")
 }
@@ -117,7 +118,7 @@ func TestKBPermissionsOwnerShortcutOnlyGrantsRead(t *testing.T) {
 	roles := []types.TenantRole{types.TenantRoleViewer, types.TenantRoleContributor, types.TenantRoleAdmin}
 	for _, role := range roles {
 		ctx := context.WithValue(callerContext(), types.TenantRoleContextKey, role)
-		permissions := NewKBPermissions(ctx, nil)
+		permissions := NewKBPermissions(ctx, nil, nil)
 		for _, required := range []types.OrgMemberRole{types.OrgRoleViewer, types.OrgRoleEditor, types.OrgRoleAdmin} {
 			allowed, err := permissions.Check("kb", 1, required)
 			require.NoError(t, err)
@@ -129,7 +130,7 @@ func TestKBPermissionsOwnerShortcutOnlyGrantsRead(t *testing.T) {
 			EffectiveTenantID: 1,
 			Permission:        types.OrgRoleEditor,
 		}
-		permissions = NewKBPermissions(grant.Context(ctx), nil)
+		permissions = NewKBPermissions(grant.Context(ctx), nil, nil)
 		allowed, err := permissions.Check("kb", 1, types.OrgRoleEditor)
 		require.NoError(t, err)
 		require.True(t, allowed)

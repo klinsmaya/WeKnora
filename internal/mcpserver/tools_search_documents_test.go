@@ -110,7 +110,7 @@ func newDocumentSearchFixture(t *testing.T) (*Server, *gin.Engine, *documentSear
 		nil, nil, nil, &config.Config{Conversation: &config.ConversationConfig{
 			EmbeddingTopK: 1, VectorThreshold: 0.95, KeywordThreshold: 0.95,
 		}},
-		nil, nil, nil, nil)
+		nil, nil, nil, nil, nil)
 	ep := &types.MCPEndpoint{
 		ID: "ep-1", TenantID: 1, Enabled: true,
 		KnowledgeBaseIDs: types.StringArray{"kb-own", "kb-other", "kb-shared", "kb-wiki"},

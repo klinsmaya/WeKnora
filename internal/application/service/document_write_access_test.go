@@ -310,6 +310,7 @@ func TestDocumentAndChunkWritesRequireOperationGrant(t *testing.T) {
 		types.OrgRoleViewer,
 		nil,
 		nil,
+		nil,
 	)
 	require.NoError(t, err)
 	ctx = grant.Context(ctx)

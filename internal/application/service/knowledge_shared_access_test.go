@@ -210,19 +210,20 @@ func TestGetKnowledgeBatchWithSharedAccessChecksEachKBOnceAndRechecksNextRequest
 func TestResolveKBReadTenantPreservesServiceBoundary(t *testing.T) {
 	kb := &types.KnowledgeBase{ID: "kb", TenantID: 2}
 	shares := &fakeKBShareService{allowedKBs: map[string]bool{"kb": true}}
-	tenant, err := resolveKBReadTenant(newSharedAccessContext(), kb, shares)
+	tenant, err := resolveKBReadTenant(newSharedAccessContext(), kb, shares, nil)
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), tenant)
 	_, err = resolveKBReadTenant(
 		context.WithValue(context.Background(), types.TenantIDContextKey, uint64(1)),
 		kb,
 		shares,
+		nil,
 	)
 	require.Error(t, err, "direct cross-tenant calls still require a user identity")
-	_, err = resolveKBReadTenant(newSharedAccessContext(), kb, nil)
+	_, err = resolveKBReadTenant(newSharedAccessContext(), kb, nil, nil)
 	require.Error(t, err, "a missing share service cannot grant access")
 	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(2))
-	tenant, err = resolveKBReadTenant(ctx, kb, nil)
+	tenant, err = resolveKBReadTenant(ctx, kb, nil, nil)
 	require.NoError(t, err, "a service execution context already scoped to the KB remains usable")
 	require.Equal(t, uint64(2), tenant)
 }

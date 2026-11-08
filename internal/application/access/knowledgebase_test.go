@@ -236,7 +236,7 @@ func TestResolveKBPermissionMatrix(t *testing.T) {
 				AgentID:             tt.agentID,
 				AgentSourceTenantID: tt.source,
 			}
-			grant, err := ResolveKB(context.Background(), request, kb, tt.required, shares, agents)
+			grant, err := ResolveKB(context.Background(), request, kb, tt.required, shares, agents, nil)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
 				require.Nil(t, grant)
@@ -262,7 +262,7 @@ func TestResolveKBPermissionMatrix(t *testing.T) {
 
 func TestResolveKBMissingIdentityResourceAndAPIKeyScope(t *testing.T) {
 	kb := &types.KnowledgeBase{ID: "kb", TenantID: 1}
-	_, err := ResolveKB(context.Background(), KBRequest{}, kb, types.OrgRoleViewer, nil, nil)
+	_, err := ResolveKB(context.Background(), KBRequest{}, kb, types.OrgRoleViewer, nil, nil, nil)
 	require.ErrorIs(t, err, ErrUnauthorized)
 	_, err = ResolveKB(
 		context.Background(),
@@ -271,12 +271,13 @@ func TestResolveKBMissingIdentityResourceAndAPIKeyScope(t *testing.T) {
 		types.OrgRoleViewer,
 		nil,
 		nil,
+		nil,
 	)
 	require.ErrorIs(t, err, ErrNotFound)
 	ctx := types.WithTenantAPIKeyScope(
 		context.Background(),
 		types.TenantAPIKeyScope{KnowledgeBaseIDs: types.StringArray{"other"}},
 	)
-	_, err = ResolveKB(ctx, KBRequest{Caller: types.Caller{TenantID: 1}}, kb, types.OrgRoleViewer, nil, nil)
+	_, err = ResolveKB(ctx, KBRequest{Caller: types.Caller{TenantID: 1}}, kb, types.OrgRoleViewer, nil, nil, nil)
 	require.Error(t, err, "API key scope must apply even to owned KBs")
 }

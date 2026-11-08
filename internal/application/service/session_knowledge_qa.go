@@ -286,7 +286,7 @@ func (s *sessionService) selectChatModelID(
 		knowledgeBaseIDs = uniqueNonEmptyStrings(knowledgeBaseIDs)
 	}
 
-	permissions := kbReadPermissions(ctx, s.kbShareService)
+	permissions := kbReadPermissions(ctx, s.kbShareService, s.userKBGrants)
 	var firstKB *types.KnowledgeBase
 	for _, kbID := range knowledgeBaseIDs {
 		kb, err := s.knowledgeBaseService.GetKnowledgeBaseByID(ctx, kbID)
@@ -459,7 +459,7 @@ func (s *sessionService) buildSearchTargets(
 	fullKBSet := make(map[string]bool)
 
 	// First pass: batch-fetch KBs, then resolve tenant per ID (tenant scope already set by caller)
-	permissions := kbReadPermissions(ctx, s.kbShareService)
+	permissions := kbReadPermissions(ctx, s.kbShareService, s.userKBGrants)
 	kbIDsToFetch := append([]string(nil), knowledgeBaseIDs...)
 	for kbID := range tagIDsByKB {
 		kbIDsToFetch = append(kbIDsToFetch, kbID)

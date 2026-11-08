@@ -53,6 +53,7 @@ type wikiPageService struct {
 	chunkRepo       interfaces.ChunkRepository
 	kbService       interfaces.KnowledgeBaseService
 	kbShareService  interfaces.KBShareService
+	userKBGrants    access.UserKBGrantLookup
 	taskPendingRepo interfaces.TaskPendingOpsRepository
 	redisClient     *redis.Client
 }
@@ -67,12 +68,14 @@ func NewWikiPageService(
 	taskPendingRepo interfaces.TaskPendingOpsRepository,
 	redisClient *redis.Client,
 	kbShareService interfaces.KBShareService,
+	userKBGrants access.UserKBGrantLookup,
 ) interfaces.WikiPageService {
 	return &wikiPageService{
 		repo:            repo,
 		chunkRepo:       chunkRepo,
 		kbService:       kbService,
 		kbShareService:  kbShareService,
+		userKBGrants:    userKBGrants,
 		taskPendingRepo: taskPendingRepo,
 		redisClient:     redisClient,
 	}
@@ -1321,7 +1324,7 @@ func (s *wikiPageService) SearchPagesAcross(
 	}
 	// Authorize before inspecting KB settings so an unauthorized caller gets
 	// the same NotFound for a foreign KB regardless of its wiki setting.
-	if err := access.AuthorizeKBAccess(ctx, s.kbShareService, authorized); err != nil {
+	if err := access.AuthorizeKBAccess(ctx, s.kbShareService, s.userKBGrants, authorized); err != nil {
 		return nil, err
 	}
 	for _, kb := range authorized {

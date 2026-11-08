@@ -35,12 +35,18 @@ var (
 // — Viewer in your own tenant cannot write — even when the access is
 // routed through cross-tenant sharing.
 type kbShareService struct {
-	shareRepo interfaces.KBShareRepository
-	orgRepo   interfaces.OrganizationRepository
-	kbRepo    interfaces.KnowledgeBaseRepository
-	kgRepo    interfaces.KnowledgeRepository
-	chunkRepo interfaces.ChunkRepository
-	audit     interfaces.AuditLogService
+	shareRepo     interfaces.KBShareRepository
+	orgRepo       interfaces.OrganizationRepository
+	kbRepo        interfaces.KnowledgeBaseRepository
+	kgRepo        interfaces.KnowledgeRepository
+	chunkRepo     interfaces.ChunkRepository
+	audit         interfaces.AuditLogService
+	personalCards PersonalKBCards
+}
+
+// PersonalKBCards lists the knowledge bases granted directly to one user.
+type PersonalKBCards interface {
+	CardsForUser(ctx context.Context, userID string) ([]*types.SharedKnowledgeBaseInfo, error)
 }
 
 // NewKBShareService creates a new knowledge base share service
@@ -51,26 +57,17 @@ func NewKBShareService(
 	kgRepo interfaces.KnowledgeRepository,
 	chunkRepo interfaces.ChunkRepository,
 	audit interfaces.AuditLogService,
+	personalCards PersonalKBCards,
 ) interfaces.KBShareService {
 	return &kbShareService{
-		shareRepo: shareRepo,
-		orgRepo:   orgRepo,
-		kbRepo:    kbRepo,
-		kgRepo:    kgRepo,
-		chunkRepo: chunkRepo,
-		audit:     audit,
+		shareRepo:     shareRepo,
+		orgRepo:       orgRepo,
+		kbRepo:        kbRepo,
+		kgRepo:        kgRepo,
+		chunkRepo:     chunkRepo,
+		audit:         audit,
+		personalCards: personalCards,
 	}
-}
-
-// applyTenantRoleCap applies the third dimension of the cap: a caller
-// whose own tenant role is Viewer cannot exceed OrgRoleViewer on any
-// shared resource, regardless of what the org-level grant said. Higher
-// roles (Contributor / Admin / Owner) pass through unchanged.
-func applyTenantRoleCap(p types.OrgMemberRole, callerTenantRole types.TenantRole) types.OrgMemberRole {
-	if callerTenantRole == types.TenantRoleViewer && p.HasPermission(types.OrgRoleEditor) {
-		return types.OrgRoleViewer
-	}
-	return p
 }
 
 // ShareKnowledgeBase shares a knowledge base to an organization.
@@ -307,7 +304,7 @@ func (s *kbShareService) ListSharedKnowledgeBases(ctx context.Context, tenantID 
 
 		// 3-D cap: share × tenant_org_role × tenant_role_cap.
 		effective := types.MinOrgRole(share.Permission, tm.Role)
-		effective = applyTenantRoleCap(effective, callerTenantRole)
+		effective = types.CapOrgRoleByTenantRole(effective, callerTenantRole)
 
 		kb := share.KnowledgeBase
 		switch kb.Type {
@@ -351,12 +348,79 @@ func (s *kbShareService) ListSharedKnowledgeBases(ctx context.Context, tenantID 
 		}
 	}
 
+	if err := s.appendPersonalKBCards(ctx, tenantID, callerTenantRole, kbInfoMap); err != nil {
+		return nil, err
+	}
+
 	result := make([]*types.SharedKnowledgeBaseInfo, 0, len(kbInfoMap))
 	for _, info := range kbInfoMap {
 		result = append(result, info)
 	}
 
 	return result, nil
+}
+
+func (s *kbShareService) appendPersonalKBCards(
+	ctx context.Context,
+	tenantID uint64,
+	callerTenantRole types.TenantRole,
+	kbInfoMap map[string]*types.SharedKnowledgeBaseInfo,
+) error {
+	caller := types.CallerFromContext(ctx)
+	if caller.UserID == "" || s.personalCards == nil {
+		return nil
+	}
+	cards, err := s.personalCards.CardsForUser(ctx, caller.UserID)
+	if err != nil {
+		return err
+	}
+	for _, card := range cards {
+		if card == nil || card.KnowledgeBase == nil || card.KnowledgeBase.ID == "" {
+			continue
+		}
+		kb := card.KnowledgeBase
+		if kb.IsTemporary || kb.TenantID == tenantID {
+			continue
+		}
+		effective := types.CapOrgRoleByTenantRole(card.Permission, callerTenantRole)
+		existing, exists := kbInfoMap[kb.ID]
+		if exists {
+			if effective.HasPermission(existing.Permission) && effective != existing.Permission {
+				existing.Permission = effective
+			}
+			continue
+		}
+		s.fillSharedKBCounts(ctx, kb, kb.TenantID)
+		kbInfoMap[kb.ID] = &types.SharedKnowledgeBaseInfo{
+			KnowledgeBase:  kb,
+			Permission:     effective,
+			SourceTenantID: kb.TenantID,
+			SharedAt:       card.SharedAt,
+		}
+	}
+	return nil
+}
+
+func (s *kbShareService) fillSharedKBCounts(ctx context.Context, kb *types.KnowledgeBase, sourceTenantID uint64) {
+	if kb == nil {
+		return
+	}
+	switch kb.Type {
+	case types.KnowledgeBaseTypeDocument:
+		if s.kgRepo == nil {
+			return
+		}
+		if count, err := s.kgRepo.CountKnowledgeByKnowledgeBaseID(ctx, sourceTenantID, kb.ID); err == nil {
+			kb.KnowledgeCount = count
+		}
+	case types.KnowledgeBaseTypeFAQ:
+		if s.chunkRepo == nil {
+			return
+		}
+		if count, err := s.chunkRepo.CountChunksByKnowledgeBaseID(ctx, sourceTenantID, kb.ID); err == nil {
+			kb.ChunkCount = count
+		}
+	}
 }
 
 // ListSharedKnowledgeBasesInOrganization returns all knowledge bases shared to
@@ -383,7 +447,7 @@ func (s *kbShareService) ListSharedKnowledgeBasesInOrganization(ctx context.Cont
 		}
 
 		effective := types.MinOrgRole(share.Permission, tm.Role)
-		effective = applyTenantRoleCap(effective, callerTenantRole)
+		effective = types.CapOrgRoleByTenantRole(effective, callerTenantRole)
 
 		kb := share.KnowledgeBase
 		switch kb.Type {
@@ -504,7 +568,7 @@ func (s *kbShareService) CheckTenantKBPermission(ctx context.Context, kbID strin
 		isShared = true
 
 		effective := types.MinOrgRole(share.Permission, tm.Role)
-		effective = applyTenantRoleCap(effective, callerTenantRole)
+		effective = types.CapOrgRoleByTenantRole(effective, callerTenantRole)
 
 		if highest == "" || effective.HasPermission(highest) {
 			highest = effective

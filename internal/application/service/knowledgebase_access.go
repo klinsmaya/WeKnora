@@ -11,11 +11,12 @@ import (
 
 // Service reads accept exact upstream grants. Otherwise cross-tenant reads
 // require a user and organization permission resolved for the original caller.
-func kbReadPermissions(ctx context.Context, shares access.KBShareLookup) *access.KBPermissions {
+func kbReadPermissions(ctx context.Context, shares access.KBShareLookup, grants access.UserKBGrantLookup) *access.KBPermissions {
 	if types.CallerFromContext(ctx).UserID == "" {
 		shares = nil
+		grants = nil
 	}
-	return access.NewKBPermissions(ctx, shares)
+	return access.NewKBPermissions(ctx, shares, grants)
 }
 
 // kbWritableIDs returns the target KBs the caller may modify: those of its own
@@ -29,7 +30,8 @@ func kbReadPermissions(ctx context.Context, shares access.KBShareLookup) *access
 // key the ingest capability, as in access.RequireKBWrite. roleEnforced mirrors
 // the RBAC rollout switch, under which role checks only log.
 func kbWritableIDs(
-	ctx context.Context, shares access.KBShareLookup, targets types.SearchTargets, roleEnforced bool,
+	ctx context.Context, shares access.KBShareLookup, grants access.UserKBGrantLookup,
+	targets types.SearchTargets, roleEnforced bool,
 ) []string {
 	caller := types.CallerFromContext(ctx)
 	if scope, ok := types.TenantAPIKeyScopeFromContext(ctx); ok {
@@ -41,6 +43,7 @@ func kbWritableIDs(
 	}
 	if caller.UserID == "" {
 		shares = nil
+		grants = nil
 	}
 	permissions := access.NewKBSharePermissions(ctx, shares, caller.TenantID, caller.Role)
 	seen := make(map[string]bool, len(targets))
@@ -54,6 +57,10 @@ func kbWritableIDs(
 		if !writable {
 			writable, _ = permissions.Check(target.KnowledgeBaseID, types.OrgRoleEditor)
 		}
+		if !writable && grants != nil {
+			role, ok, err := grants.Effective(ctx, target.KnowledgeBaseID, caller)
+			writable = err == nil && ok && role.HasPermission(types.OrgRoleEditor)
+		}
 		if writable {
 			ids = append(ids, target.KnowledgeBaseID)
 		}
@@ -61,9 +68,9 @@ func kbWritableIDs(
 	return ids
 }
 
-func resolveKBReadTenant(ctx context.Context, kb *types.KnowledgeBase, shares access.KBShareLookup) (uint64, error) {
+func resolveKBReadTenant(ctx context.Context, kb *types.KnowledgeBase, shares access.KBShareLookup, grants access.UserKBGrantLookup) (uint64, error) {
 	if kb != nil {
-		allowed, err := kbReadPermissions(ctx, shares).Check(kb.ID, kb.TenantID, types.OrgRoleViewer)
+		allowed, err := kbReadPermissions(ctx, shares, grants).Check(kb.ID, kb.TenantID, types.OrgRoleViewer)
 		if err == nil && allowed {
 			return kb.TenantID, nil
 		}

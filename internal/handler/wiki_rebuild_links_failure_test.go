@@ -46,7 +46,7 @@ func newRebuildLinksHandler(t *testing.T) (*gin.Engine, *gorm.DB, interfaces.Wik
 	}
 
 	handler := &WikiPageHandler{
-		wikiService: service.NewWikiPageService(repo, nil, nil, nil, nil, nil),
+		wikiService: service.NewWikiPageService(repo, nil, nil, nil, nil, nil, nil),
 		kbService: &stubKBService{get: func(_ context.Context, id string) (*types.KnowledgeBase, error) {
 			return &types.KnowledgeBase{
 				ID:               id,

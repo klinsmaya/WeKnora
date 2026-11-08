@@ -111,9 +111,9 @@ func TestSharedExecutionFiltersDocumentsChunksAndSearchScope(t *testing.T) {
 			got = append(got, target.KnowledgeBaseID)
 		}
 		require.ElementsMatch(t, []string{"own", "granted"}, got)
-		_, err = resolveKBReadTenant(ctx, kbs[1], shares)
+		_, err = resolveKBReadTenant(ctx, kbs[1], shares, nil)
 		require.NoError(t, err, "FAQ/tag reads accept the exact upstream grant")
-		_, err = resolveKBReadTenant(ctx, kbs[2], shares)
+		_, err = resolveKBReadTenant(ctx, kbs[2], shares, nil)
 		require.Error(t, err, "FAQ/tag reads cannot access another KB in the execution tenant")
 	}
 	for _, caller := range shares.callers {

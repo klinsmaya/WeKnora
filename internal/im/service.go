@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	agenttools "github.com/Tencent/WeKnora/internal/agent/tools"
+	"github.com/Tencent/WeKnora/internal/application/access"
 	"github.com/Tencent/WeKnora/internal/config"
 	apperrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/event"
@@ -314,6 +315,7 @@ type Service struct {
 	// kbService is used by slash-commands (/info) to list and inspect knowledge bases.
 	kbService      interfaces.KnowledgeBaseService
 	kbShareService interfaces.KBShareService
+	userKBGrants   access.UserKBGrantLookup
 
 	// oauthManager builds MCP OAuth authorization URLs so IM users can authorize
 	// OAuth-enabled MCP services out-of-band (IM cannot resolve the in-conversation
@@ -876,6 +878,7 @@ func NewService(
 	storageResolver interfaces.StorageBackendResolver,
 	resourceCatalog interfaces.ResourceCatalog,
 	kbShareService interfaces.KBShareService,
+	userKBGrants access.UserKBGrantLookup,
 ) *Service {
 	// Resolve IM configuration with defaults.
 	workers, maxQueue, maxPerUser, globalMaxWorkers, rlWindow, rlMax := resolveIMConfig(appCfg)
@@ -903,6 +906,7 @@ func NewService(
 		storageResolver:  storageResolver,
 		resourceCatalog:  resourceCatalog,
 		kbShareService:   kbShareService,
+		userKBGrants:     userKBGrants,
 		oauthManager:     oauthManager,
 		cmdRegistry:      registry,
 		channels:         make(map[string]*channelState),
