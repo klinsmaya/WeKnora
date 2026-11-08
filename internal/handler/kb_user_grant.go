@@ -30,14 +30,13 @@ func (h *KBUserGrantHandler) Upsert(c *gin.Context) {
 		return
 	}
 	caller := types.CallerFromContext(c.Request.Context())
-	grant, err := h.grants.Upsert(
-		c.Request.Context(),
-		c.Param("id"),
-		c.Param("user_id"),
-		body.Permission,
-		caller.UserID,
-		caller.TenantID,
-	)
+	var grant *kbusergrant.KBUserGrant
+	var err error
+	if source := c.Param("source"); source != "" {
+		grant, err = h.grants.UpsertSource(c.Request.Context(), c.Param("id"), c.Param("user_id"), body.Permission, caller.UserID, caller.TenantID, source)
+	} else {
+		grant, err = h.grants.Upsert(c.Request.Context(), c.Param("id"), c.Param("user_id"), body.Permission, caller.UserID, caller.TenantID)
+	}
 	if err != nil {
 		writeGrantError(c, err)
 		return
@@ -66,7 +65,13 @@ func (h *KBUserGrantHandler) List(c *gin.Context) {
 
 func (h *KBUserGrantHandler) Revoke(c *gin.Context) {
 	caller := types.CallerFromContext(c.Request.Context())
-	if err := h.grants.Revoke(c.Request.Context(), c.Param("id"), c.Param("user_id"), caller.TenantID); err != nil {
+	var err error
+	if source := c.Param("source"); source != "" {
+		err = h.grants.RevokeSource(c.Request.Context(), c.Param("id"), c.Param("user_id"), caller.TenantID, source)
+	} else {
+		err = h.grants.Revoke(c.Request.Context(), c.Param("id"), c.Param("user_id"), caller.TenantID)
+	}
+	if err != nil {
 		writeGrantError(c, err)
 		return
 	}

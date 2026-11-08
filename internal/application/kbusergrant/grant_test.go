@@ -2,7 +2,10 @@ package kbusergrant_test
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,11 +14,25 @@ import (
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 const grantTableSQL = `
+CREATE TABLE IF NOT EXISTS kb_user_grant_sources (
+    knowledge_base_id VARCHAR(36) NOT NULL,
+    recipient_user_id VARCHAR(36) NOT NULL,
+    source VARCHAR(96) NOT NULL,
+    permission VARCHAR(32) NOT NULL,
+    granted_by_user_id VARCHAR(36) NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    PRIMARY KEY (knowledge_base_id, recipient_user_id, source),
+    CHECK (permission IN ('viewer', 'editor'))
+);
+CREATE INDEX IF NOT EXISTS idx_kb_user_grant_sources_recipient ON kb_user_grant_sources(recipient_user_id);
+
 CREATE TABLE IF NOT EXISTS kb_user_grants (
     knowledge_base_id VARCHAR(36) NOT NULL,
     recipient_user_id VARCHAR(36) NOT NULL,
@@ -83,10 +100,51 @@ type grantFixture struct {
 
 func newGrantFixture(t *testing.T) *grantFixture {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "grants.db")), &gorm.Config{})
+	var db *gorm.DB
+	var err error
+	if os.Getenv("GRANT_TEST_POSTGRES") == "1" {
+		const dsn = "host=127.0.0.1 port=23332 user=postgres password=review-local dbname=codex_share_test sslmode=disable"
+		admin, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		require.NoError(t, err)
+		schema := fmt.Sprintf("codex_grant_%d", time.Now().UnixNano())
+		require.NoError(t, admin.Exec("CREATE SCHEMA "+schema).Error)
+		t.Cleanup(func() {
+			require.NoError(t, admin.Exec("DROP SCHEMA "+schema+" CASCADE").Error)
+			sqlDB, err := admin.DB()
+			require.NoError(t, err)
+			require.NoError(t, sqlDB.Close())
+		})
+		db, err = gorm.Open(postgres.Open(dsn+" search_path="+schema), &gorm.Config{})
+		require.NoError(t, err)
+	} else {
+		db, err = gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "grants.db")), &gorm.Config{})
+		require.NoError(t, err)
+	}
+	sqlDB, err := db.DB()
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(grantTableSQL).Error)
-	require.NoError(t, db.Exec(shareTableSQL).Error)
+	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
+	dialect := "sqlite"
+	version := "000053"
+	sourcesVersion := "000054"
+	if db.Dialector.Name() == "postgres" {
+		dialect = "versioned"
+		version = "000137"
+		sourcesVersion = "000138"
+	}
+	root := moduleRoot(t)
+	original, err := os.ReadFile(filepath.Join(root, "migrations", dialect, version+"_kb_user_grants.up.sql"))
+	require.NoError(t, err)
+	sources, err := os.ReadFile(filepath.Join(root, "migrations", dialect, sourcesVersion+"_kb_user_grant_sources.up.sql"))
+	require.NoError(t, err)
+	require.NoError(t, db.Exec(string(original)).Error)
+	for range 2 {
+		require.NoError(t, db.Exec(string(sources)).Error)
+	}
+	shareSQL := shareTableSQL
+	if dialect == "versioned" {
+		shareSQL = strings.ReplaceAll(shareSQL, "DATETIME", "TIMESTAMPTZ")
+	}
+	require.NoError(t, db.Exec(shareSQL).Error)
 	kbs := memoryKBs{rows: map[string]*types.KnowledgeBase{
 		"kb-1": {ID: "kb-1", TenantID: 1, Name: "Owned"},
 		"kb-2": {ID: "kb-2", TenantID: 1, Name: "Other"},
@@ -281,4 +339,43 @@ func TestGrantViewerWorkspaceCapsEditorGrant(t *testing.T) {
 	resolved, err = access.ResolveKB(ctx, access.KBRequest{Caller: contributor}, kb, types.OrgRoleEditor, nil, nil, fx.svc)
 	require.NoError(t, err)
 	require.Equal(t, types.OrgRoleEditor, resolved.Permission)
+}
+
+func TestGrantSourcesPreserveIndependentPermissions(t *testing.T) {
+	fx := newGrantFixture(t)
+	ctx := t.Context()
+	_, err := fx.svc.Upsert(ctx, "kb-1", "user-a", "editor", "owner", 1)
+	require.NoError(t, err)
+	_, err = fx.svc.UpsertSource(ctx, "kb-1", "user-a", "viewer", "owner", 1, "portal-share-a")
+	require.NoError(t, err)
+	caller := types.Caller{UserID: "user-a", Role: types.TenantRoleContributor}
+	role, ok, err := fx.svc.Effective(ctx, "kb-1", caller)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, types.OrgRoleEditor, role)
+	require.NoError(t, fx.svc.RevokeSource(ctx, "kb-1", "user-a", 1, "portal-share-a"))
+	role, ok, err = fx.svc.Effective(ctx, "kb-1", caller)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, types.OrgRoleEditor, role)
+	require.NoError(t, fx.svc.Revoke(ctx, "kb-1", "user-a", 1))
+	_, err = fx.svc.UpsertSource(ctx, "kb-1", "user-a", "viewer", "owner", 1, "portal-share-a")
+	require.NoError(t, err)
+	_, err = fx.svc.UpsertSource(ctx, "kb-1", "user-a", "editor", "owner", 1, "portal-share-b")
+	require.NoError(t, err)
+	cards, err := fx.svc.CardsForUser(ctx, "user-a")
+	require.NoError(t, err)
+	require.Len(t, cards, 1)
+	require.Equal(t, types.OrgRoleEditor, cards[0].Permission)
+	require.NoError(t, fx.svc.RevokeSource(ctx, "kb-1", "user-a", 1, "portal-share-b"))
+	role, ok, err = fx.svc.Effective(ctx, "kb-1", caller)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, types.OrgRoleViewer, role)
+	require.NoError(t, fx.svc.RevokeSource(ctx, "kb-1", "user-a", 1, "portal-share-a"))
+	_, ok, err = fx.svc.Effective(ctx, "kb-1", caller)
+	require.NoError(t, err)
+	require.False(t, ok)
+	_, err = fx.svc.UpsertSource(ctx, "kb-1", "user-a", "editor", "owner", 2, "portal-share-a")
+	require.ErrorIs(t, err, kbusergrant.ErrForbidden)
 }

@@ -29,6 +29,7 @@ type KBUserGrantPermission string
 type KBUserGrant struct {
 	KnowledgeBaseID string                `json:"knowledge_base_id" gorm:"primaryKey;type:varchar(36)"`
 	RecipientUserID string                `json:"recipient_user_id" gorm:"primaryKey;type:varchar(36)"`
+	Source          string                `json:"source,omitempty" gorm:"->;-:migration"`
 	Permission      KBUserGrantPermission `json:"permission" gorm:"type:varchar(32);not null"`
 	GrantedByUserID string                `json:"granted_by_user_id" gorm:"type:varchar(36);not null"`
 	CreatedAt       time.Time             `json:"created_at"`
@@ -36,6 +37,32 @@ type KBUserGrant struct {
 }
 
 func (KBUserGrant) TableName() string { return "kb_user_grants" }
+
+// Source grants coexist with direct grants. Revoking one source never removes
+// a direct grant or another integration's grant for the same recipient.
+type SourceGrant struct {
+	KnowledgeBaseID string                `gorm:"primaryKey;type:varchar(36)"`
+	RecipientUserID string                `gorm:"primaryKey;type:varchar(36)"`
+	Source          string                `gorm:"primaryKey;type:varchar(96)"`
+	Permission      KBUserGrantPermission `gorm:"type:varchar(32);not null"`
+	GrantedByUserID string                `gorm:"type:varchar(36);not null"`
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+func (SourceGrant) TableName() string { return "kb_user_grant_sources" }
+
+func ValidSource(source string) bool {
+	if len(source) == 0 || len(source) > 96 {
+		return false
+	}
+	for _, c := range source {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == ':') {
+			return false
+		}
+	}
+	return true
+}
 
 func ParsePermission(raw string) (KBUserGrantPermission, error) {
 	switch KBUserGrantPermission(strings.TrimSpace(raw)) {
@@ -70,6 +97,17 @@ func (s *Service) Upsert(
 	knowledgeBaseID, recipientUserID, rawPermission, grantedByUserID string,
 	callerTenantID uint64,
 ) (*KBUserGrant, error) {
+	return s.upsert(ctx, knowledgeBaseID, recipientUserID, rawPermission, grantedByUserID, callerTenantID, "")
+}
+
+func (s *Service) UpsertSource(ctx context.Context, knowledgeBaseID, recipientUserID, rawPermission, grantedByUserID string, callerTenantID uint64, source string) (*KBUserGrant, error) {
+	if !ValidSource(source) {
+		return nil, ErrInvalidPermission
+	}
+	return s.upsert(ctx, knowledgeBaseID, recipientUserID, rawPermission, grantedByUserID, callerTenantID, source)
+}
+
+func (s *Service) upsert(ctx context.Context, knowledgeBaseID, recipientUserID, rawPermission, grantedByUserID string, callerTenantID uint64, source string) (*KBUserGrant, error) {
 	permission, err := ParsePermission(rawPermission)
 	if err != nil {
 		return nil, err
@@ -100,18 +138,34 @@ func (s *Service) Upsert(
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
-	err = s.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "knowledge_base_id"}, {Name: "recipient_user_id"}},
+	columns := []clause.Column{{Name: "knowledge_base_id"}, {Name: "recipient_user_id"}}
+	target := s.db.WithContext(ctx).Model(&KBUserGrant{})
+	if source != "" {
+		columns = append(columns, clause.Column{Name: "source"})
+		target = s.db.WithContext(ctx).Model(&SourceGrant{})
+	}
+	values := map[string]any{
+		"knowledge_base_id": row.KnowledgeBaseID, "recipient_user_id": row.RecipientUserID,
+		"permission": permission, "granted_by_user_id": grantedByUserID, "created_at": now, "updated_at": now,
+	}
+	if source != "" {
+		values["source"] = source
+	}
+	err = target.Clauses(clause.OnConflict{
+		Columns: columns,
 		DoUpdates: clause.Assignments(map[string]any{
-			"permission":         permission,
-			"granted_by_user_id": grantedByUserID,
-			"updated_at":         now,
+			"permission": permission, "granted_by_user_id": grantedByUserID, "updated_at": now,
 		}),
-	}).Create(&row).Error
+	}).Create(values).Error
 	if err != nil {
 		return nil, err
 	}
-	return s.get(ctx, row.KnowledgeBaseID, row.RecipientUserID)
+	if source == "" {
+		err = s.db.WithContext(ctx).Where("knowledge_base_id = ? AND recipient_user_id = ?", row.KnowledgeBaseID, row.RecipientUserID).Take(&row).Error
+	} else {
+		err = s.db.WithContext(ctx).Table("kb_user_grant_sources").Where("knowledge_base_id = ? AND recipient_user_id = ? AND source = ?", row.KnowledgeBaseID, row.RecipientUserID, source).Take(&row).Error
+	}
+	return &row, err
 }
 
 func (s *Service) ListByKnowledgeBase(ctx context.Context, knowledgeBaseID string, callerTenantID uint64) ([]KBUserGrant, error) {
@@ -167,7 +221,7 @@ func (s *Service) CardsForUser(ctx context.Context, userID string) ([]*types.Sha
 		return nil, nil
 	}
 	var rows []KBUserGrant
-	if err := s.db.WithContext(ctx).Where("recipient_user_id = ?", userID).Find(&rows).Error; err != nil {
+	if err := s.allGrants(ctx).Where("recipient_user_id = ?", userID).Order("permission ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	if len(rows) == 0 {
@@ -188,7 +242,12 @@ func (s *Service) CardsForUser(ctx context.Context, userID string) ([]*types.Sha
 		}
 	}
 	cards := make([]*types.SharedKnowledgeBaseInfo, 0, len(rows))
+	seen := make(map[string]bool)
 	for _, row := range rows {
+		if seen[row.KnowledgeBaseID] {
+			continue
+		}
+		seen[row.KnowledgeBaseID] = true
 		kb := byID[row.KnowledgeBaseID]
 		if kb == nil {
 			continue
@@ -226,11 +285,29 @@ func (s *Service) ownedKB(ctx context.Context, knowledgeBaseID string, callerTen
 
 func (s *Service) get(ctx context.Context, knowledgeBaseID, recipientUserID string) (*KBUserGrant, error) {
 	var row KBUserGrant
-	err := s.db.WithContext(ctx).
+	err := s.allGrants(ctx).
 		Where("knowledge_base_id = ? AND recipient_user_id = ?", knowledgeBaseID, recipientUserID).
+		Order("permission ASC").
 		Take(&row).Error
 	if err != nil {
 		return nil, err
 	}
 	return &row, nil
+}
+
+func (s *Service) allGrants(ctx context.Context) *gorm.DB {
+	direct := s.db.WithContext(ctx).Model(&KBUserGrant{}).Select("knowledge_base_id, recipient_user_id, permission, granted_by_user_id, created_at, updated_at, '' AS source")
+	sources := s.db.WithContext(ctx).Model(&SourceGrant{}).Select("knowledge_base_id, recipient_user_id, permission, granted_by_user_id, created_at, updated_at, source")
+	return s.db.WithContext(ctx).Table("(? UNION ALL ?) AS grants", direct, sources)
+}
+
+func (s *Service) RevokeSource(ctx context.Context, knowledgeBaseID, recipientUserID string, callerTenantID uint64, source string) error {
+	if !ValidSource(source) || strings.TrimSpace(recipientUserID) == "" {
+		return ErrInvalidPermission
+	}
+	kb, err := s.ownedKB(ctx, knowledgeBaseID, callerTenantID)
+	if err != nil {
+		return err
+	}
+	return s.db.WithContext(ctx).Where("knowledge_base_id = ? AND recipient_user_id = ? AND source = ?", kb.ID, recipientUserID, source).Delete(&SourceGrant{}).Error
 }
