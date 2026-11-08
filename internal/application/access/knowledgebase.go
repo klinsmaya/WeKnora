@@ -75,8 +75,6 @@ type KBShareLookup interface {
 	CheckTenantKBPermission(context.Context, string, uint64, types.TenantRole) (types.OrgMemberRole, bool, error)
 }
 
-// UserKBGrantLookup resolves one user's grant on one knowledge base.
-// An empty user id and a missing row are not access. A lookup error is not access.
 type UserKBGrantLookup interface {
 	Effective(ctx context.Context, knowledgeBaseID string, caller types.Caller) (types.OrgMemberRole, bool, error)
 }

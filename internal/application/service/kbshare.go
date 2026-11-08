@@ -44,7 +44,6 @@ type kbShareService struct {
 	personalCards PersonalKBCards
 }
 
-// PersonalKBCards lists the knowledge bases granted directly to one user.
 type PersonalKBCards interface {
 	CardsForUser(ctx context.Context, userID string) ([]*types.SharedKnowledgeBaseInfo, error)
 }
