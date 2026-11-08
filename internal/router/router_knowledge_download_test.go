@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Tencent/WeKnora/internal/application/access"
 	apprepo "github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/handler"
@@ -96,6 +97,19 @@ func newKnowledgeDownloadRouteTestEngine(
 	share interfaces.KBShareService,
 ) (*gin.Engine, *downloadRouteKnowledge) {
 	t.Helper()
+	return newKnowledgeDownloadEngine(t, role, "", knowledge, kb, share, nil)
+}
+
+func newKnowledgeDownloadEngine(
+	t *testing.T,
+	role types.TenantRole,
+	userID string,
+	knowledge *types.Knowledge,
+	kb *types.KnowledgeBase,
+	share interfaces.KBShareService,
+	grants access.UserKBGrantLookup,
+) (*gin.Engine, *downloadRouteKnowledge) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 
 	enabled := true
@@ -105,6 +119,7 @@ func newKnowledgeDownloadRouteTestEngine(
 		knowledgeService: lookup,
 		kbService:        &stubWikiKBLookup{kbs: map[string]*types.KnowledgeBase{kb.ID: kb}},
 		kbShareService:   share,
+		userKBGrants:     grants,
 	}
 	h := handler.NewKnowledgeHandler(
 		nil,
@@ -118,6 +133,7 @@ func newKnowledgeDownloadRouteTestEngine(
 		nil,
 		nil,
 		nil,
+		grants,
 	)
 
 	r := gin.New()
@@ -125,6 +141,9 @@ func newKnowledgeDownloadRouteTestEngine(
 	r.Use(func(c *gin.Context) {
 		ctx := context.WithValue(c.Request.Context(), types.TenantIDContextKey, uint64(1))
 		ctx = context.WithValue(ctx, types.TenantRoleContextKey, role)
+		if userID != "" {
+			ctx = context.WithValue(ctx, types.UserIDContextKey, userID)
+		}
 		c.Request = c.Request.WithContext(ctx)
 		c.Set(types.TenantIDContextKey.String(), uint64(1))
 		c.Next()
@@ -318,4 +337,103 @@ func TestBatchKnowledgeDownloadRejectsWithoutEffectiveRead(t *testing.T) {
 	require.NotContains(t, rec.Body.String(), knowledgeDownloadOriginal)
 	require.NotContains(t, rec.Header().Get("Content-Type"), "zip")
 	require.Zero(t, lookup.opened)
+}
+
+type downloadGrantLookup struct {
+	kbID     string
+	allowed  map[string]types.OrgMemberRole
+	calls    int
+	lastKB   string
+	lastUser string
+	lastRole types.TenantRole
+}
+
+func (s *downloadGrantLookup) Effective(_ context.Context, kbID string, caller types.Caller) (types.OrgMemberRole, bool, error) {
+	s.calls++
+	s.lastKB = kbID
+	s.lastUser = caller.UserID
+	s.lastRole = caller.Role
+	if kbID != s.kbID {
+		return "", false, nil
+	}
+	role, ok := s.allowed[caller.UserID]
+	if !ok {
+		return "", false, nil
+	}
+	return role, true, nil
+}
+
+func TestKnowledgeDownloadAllowsPersonalViewerGrant(t *testing.T) {
+	grants := &downloadGrantLookup{
+		kbID:    "kb-shared",
+		allowed: map[string]types.OrgMemberRole{"grantee": types.OrgRoleViewer},
+	}
+	engine, lookup := newKnowledgeDownloadEngine(
+		t,
+		types.TenantRoleViewer,
+		"grantee",
+		&types.Knowledge{ID: "knowledge-shared", KnowledgeBaseID: "kb-shared", TenantID: 2, FilePath: "stored/shared"},
+		&types.KnowledgeBase{ID: "kb-shared", TenantID: 2},
+		nil,
+		grants,
+	)
+
+	rec := serveKnowledgeRoute(engine, http.MethodGet, "/api/v1/knowledge/knowledge-shared/download", "")
+
+	require.Equal(t, http.StatusOK, rec.Code, "viewer grant must satisfy OrgRoleViewer download, body=%s", rec.Body.String())
+	require.Equal(t, knowledgeDownloadOriginal, rec.Body.String())
+	require.Contains(t, rec.Header().Get("Content-Disposition"), "attachment")
+	require.Equal(t, 1, lookup.opened)
+	require.Greater(t, grants.calls, 0)
+	require.Equal(t, "kb-shared", grants.lastKB)
+	require.Equal(t, "grantee", grants.lastUser)
+	require.Equal(t, types.TenantRoleViewer, grants.lastRole)
+}
+
+func TestKnowledgeDownloadDeniesNonGrantee(t *testing.T) {
+	knowledge := &types.Knowledge{ID: "knowledge-shared", KnowledgeBaseID: "kb-shared", TenantID: 2, FilePath: "stored/secret"}
+	kb := &types.KnowledgeBase{ID: "kb-shared", TenantID: 2}
+	grants := &downloadGrantLookup{
+		kbID:    "kb-shared",
+		allowed: map[string]types.OrgMemberRole{"grantee": types.OrgRoleViewer},
+	}
+	engine, lookup := newKnowledgeDownloadEngine(t, types.TenantRoleViewer, "coworker", knowledge, kb, nil, grants)
+	rec := serveKnowledgeRoute(engine, http.MethodGet, "/api/v1/knowledge/knowledge-shared/download", "")
+	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+	require.NotContains(t, rec.Body.String(), knowledgeDownloadOriginal)
+	require.Zero(t, lookup.opened)
+	require.Greater(t, grants.calls, 0)
+	require.Equal(t, "kb-shared", grants.lastKB)
+	require.Equal(t, "coworker", grants.lastUser)
+
+	otherKB := &downloadGrantLookup{
+		kbID:    "kb-other",
+		allowed: map[string]types.OrgMemberRole{"coworker": types.OrgRoleEditor},
+	}
+	otherEngine, otherLookup := newKnowledgeDownloadEngine(t, types.TenantRoleViewer, "coworker", knowledge, kb, nil, otherKB)
+	other := serveKnowledgeRoute(otherEngine, http.MethodGet, "/api/v1/knowledge/knowledge-shared/download", "")
+	require.Equal(t, http.StatusForbidden, other.Code, other.Body.String())
+	require.Zero(t, otherLookup.opened)
+	require.Equal(t, "kb-shared", otherKB.lastKB)
+}
+
+func TestKnowledgeDownloadDeniesAfterRevoke(t *testing.T) {
+	grants := &downloadGrantLookup{
+		kbID:    "kb-shared",
+		allowed: map[string]types.OrgMemberRole{"grantee": types.OrgRoleViewer},
+	}
+	knowledge := &types.Knowledge{ID: "knowledge-shared", KnowledgeBaseID: "kb-shared", TenantID: 2, FilePath: "stored/shared"}
+	kb := &types.KnowledgeBase{ID: "kb-shared", TenantID: 2}
+	engine, lookup := newKnowledgeDownloadEngine(t, types.TenantRoleViewer, "grantee", knowledge, kb, nil, grants)
+
+	allowed := serveKnowledgeRoute(engine, http.MethodGet, "/api/v1/knowledge/knowledge-shared/download", "")
+	require.Equal(t, http.StatusOK, allowed.Code, allowed.Body.String())
+	require.Equal(t, knowledgeDownloadOriginal, allowed.Body.String())
+	require.Equal(t, 1, lookup.opened)
+
+	delete(grants.allowed, "grantee")
+	denied := serveKnowledgeRoute(engine, http.MethodGet, "/api/v1/knowledge/knowledge-shared/download", "")
+	require.Equal(t, http.StatusForbidden, denied.Code, denied.Body.String())
+	require.NotContains(t, denied.Body.String(), knowledgeDownloadOriginal)
+	require.Equal(t, 1, lookup.opened)
 }

@@ -5,6 +5,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/Tencent/WeKnora/internal/application/access"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/middleware"
@@ -141,6 +142,7 @@ type rbacGuards struct {
 	chunkService      middleware.ChunkLookup
 	kbShareService    interfaces.KBShareService
 	agentShareService interfaces.AgentShareService
+	userKBGrants      access.UserKBGrantLookup
 
 	// apiKeyAuthorizer is the single source of truth for which routes an
 	// X-API-Key principal may call. Routes opt in via the apiKeyGroup
@@ -163,6 +165,7 @@ func newRBACGuards(
 	chunkService interfaces.ChunkService,
 	kbShareService interfaces.KBShareService,
 	agentShareService interfaces.AgentShareService,
+	userKBGrants access.UserKBGrantLookup,
 ) *rbacGuards {
 	g := &rbacGuards{cfg: cfg, apiKeyAuthorizer: middleware.NewAPIKeyRouteAuthorizer()}
 	if kbHandler != nil {
@@ -187,6 +190,7 @@ func newRBACGuards(
 	g.chunkService = chunkService
 	g.kbShareService = kbShareService
 	g.agentShareService = agentShareService
+	g.userKBGrants = userKBGrants
 	return g
 }
 
@@ -561,6 +565,7 @@ func (g *rbacGuards) KBAccessRead(param string) gin.HandlerFunc {
 		g.kbService,
 		g.kbShareService,
 		g.agentShareService,
+		g.userKBGrants,
 		g.cfg,
 	)
 }
@@ -575,6 +580,7 @@ func (g *rbacGuards) KBAccessWrite(param string) gin.HandlerFunc {
 		g.kbService,
 		g.kbShareService,
 		g.agentShareService,
+		g.userKBGrants,
 		g.cfg,
 	)
 }
@@ -590,6 +596,7 @@ func (g *rbacGuards) KBAccessReadFromKnowledgeIDParam(param string) gin.HandlerF
 		g.kbService,
 		g.kbShareService,
 		g.agentShareService,
+		g.userKBGrants,
 		g.cfg,
 	)
 }
@@ -603,6 +610,7 @@ func (g *rbacGuards) KBAccessWriteFromKnowledgeIDParam(param string) gin.Handler
 		g.kbService,
 		g.kbShareService,
 		g.agentShareService,
+		g.userKBGrants,
 		g.cfg,
 	)
 }
@@ -617,6 +625,7 @@ func (g *rbacGuards) KBAccessReadFromChunkIDParam(param string) gin.HandlerFunc 
 		g.kbService,
 		g.kbShareService,
 		g.agentShareService,
+		g.userKBGrants,
 		g.cfg,
 	)
 }
@@ -631,6 +640,7 @@ func (g *rbacGuards) KBAccessWriteFromChunkIDParam(param string) gin.HandlerFunc
 		g.kbService,
 		g.kbShareService,
 		g.agentShareService,
+		g.userKBGrants,
 		g.cfg,
 	)
 }

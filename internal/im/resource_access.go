@@ -64,7 +64,7 @@ func (s *Service) authorizeOutboundResource(
 			continue
 		}
 		grant, err := access.ResolveKB(ctx, access.KBRequest{Caller: caller}, kb,
-			types.OrgRoleViewer, s.kbShareService, nil)
+			types.OrgRoleViewer, s.kbShareService, nil, s.userKBGrants)
 		if err != nil {
 			continue
 		}

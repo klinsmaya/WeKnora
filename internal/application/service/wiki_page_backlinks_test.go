@@ -111,7 +111,7 @@ func backlinkBackends(t *testing.T, run func(*testing.T, backlinkHarness)) {
 				`).Error)
 			}
 			repo := repository.NewWikiPageRepository(db)
-			run(t, backlinkHarness{db: db, repo: repo, svc: NewWikiPageService(repo, nil, nil, nil, nil, nil)})
+			run(t, backlinkHarness{db: db, repo: repo, svc: NewWikiPageService(repo, nil, nil, nil, nil, nil, nil)})
 		})
 	}
 }
@@ -298,7 +298,7 @@ func TestWikiBacklinksMetadataPreservesConcurrentLink(t *testing.T) {
 			require.NoError(t, h.db.Model(&types.WikiPage{}).Where("id = ?", page.ID).
 				Update("in_links", types.StringArray{"entity/old", "entity/concurrent"}).Error)
 		}}
-		svc := NewWikiPageService(wrapped, nil, nil, nil, nil, nil)
+		svc := NewWikiPageService(wrapped, nil, nil, nil, nil, nil, nil)
 		_, err := svc.UpdatePage(context.Background(), page)
 		require.NoError(t, err)
 		actual, err := h.repo.GetByID(context.Background(), page.ID)
@@ -348,7 +348,7 @@ func TestWikiBacklinksRebuildRejectsConcurrentChange(t *testing.T) {
 			require.NoError(t, h.db.Model(&types.WikiPage{}).Where("id = ?", target.ID).
 				Update("in_links", types.StringArray{"entity/concurrent"}).Error)
 		}}
-		svc := NewWikiPageService(wrapped, nil, nil, nil, nil, nil)
+		svc := NewWikiPageService(wrapped, nil, nil, nil, nil, nil, nil)
 		err := svc.RebuildLinks(context.Background(), backlinkTestKB)
 		require.ErrorIs(t, err, repository.ErrWikiPageConflict)
 		actual, readErr := h.repo.GetByID(context.Background(), target.ID)
@@ -443,7 +443,7 @@ func TestWikiBacklinksSourceWriteFailureLeavesTargetsUntouched(t *testing.T) {
 				}
 				failure := errors.New("synthetic source write failure")
 				wrapped := &failingBacklinkSourceRepo{WikiPageRepository: h.repo, failure: failure}
-				svc := NewWikiPageService(wrapped, nil, nil, nil, nil, nil)
+				svc := NewWikiPageService(wrapped, nil, nil, nil, nil, nil, nil)
 				var err error
 				if entry == "autolink" {
 					err = svc.UpdateAutoLinkedContent(ctx, source)

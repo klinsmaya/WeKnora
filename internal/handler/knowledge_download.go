@@ -69,7 +69,7 @@ func (h *KnowledgeHandler) BatchDownloadKnowledge(c *gin.Context) {
 	// rejected unless their persisted knowledge_base_id is this library, so
 	// the client-supplied kb id cannot authorize another library's files.
 	grant, err := resolveHandlerKBAccessFor(
-		c, kbID, h.kbService, h.kbShareService, h.agentShareService, types.OrgRoleViewer,
+		c, kbID, h.kbService, h.kbShareService, h.agentShareService, h.userKBGrants, types.OrgRoleViewer,
 	)
 	if err != nil {
 		_ = c.Error(err)

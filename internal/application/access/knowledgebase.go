@@ -75,6 +75,12 @@ type KBShareLookup interface {
 	CheckTenantKBPermission(context.Context, string, uint64, types.TenantRole) (types.OrgMemberRole, bool, error)
 }
 
+// UserKBGrantLookup resolves one user's grant on one knowledge base.
+// An empty user id and a missing row are not access. A lookup error is not access.
+type UserKBGrantLookup interface {
+	Effective(ctx context.Context, knowledgeBaseID string, caller types.Caller) (types.OrgMemberRole, bool, error)
+}
+
 // SharedAgentLookup verifies access to a particular shared agent.
 type SharedAgentLookup interface {
 	GetSharedAgentForTenant(context.Context, uint64, types.TenantRole, string, ...uint64) (*types.CustomAgent, error)
@@ -93,7 +99,7 @@ type AgentShareLookup interface {
 // Share lookup errors do not grant access; an independent agent grant may still
 // allow reading. An explicit agent selector never falls back to another agent.
 func ResolveKB(ctx context.Context, request KBRequest, kb *types.KnowledgeBase, required types.OrgMemberRole,
-	shares KBShareLookup, agents AgentShareLookup,
+	shares KBShareLookup, agents AgentShareLookup, grants UserKBGrantLookup,
 ) (*KBAccess, error) {
 	if request.Caller.TenantID == 0 {
 		return nil, ErrUnauthorized
@@ -122,6 +128,12 @@ func ResolveKB(ctx context.Context, request KBRequest, kb *types.KnowledgeBase, 
 		permission, shared, err := permissions.Permission(kb.ID)
 		if err == nil && shared && permission.HasPermission(required) {
 			return grant(permission)
+		}
+	}
+	if grants != nil {
+		role, ok, err := grants.Effective(ctx, kb.ID, request.Caller)
+		if err == nil && ok && role.HasPermission(required) {
+			return grant(role)
 		}
 	}
 	if required != types.OrgRoleViewer || agents == nil {

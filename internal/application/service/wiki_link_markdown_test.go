@@ -82,7 +82,7 @@ func TestWikiLintUsesCurrentMarkdownInsteadOfStaleOutLinks(t *testing.T) {
 	))
 	ctx := context.Background()
 	repo := repository.NewWikiPageRepository(db)
-	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil)
+	svc := NewWikiPageService(repo, nil, nil, nil, nil, nil, nil)
 	const kbID = "kb-markdown-links"
 	seedWikiTestKnowledgeBase(t, db, kbID, 1)
 	content := "A sufficiently long explanation of this topic and its references.\n\n" +

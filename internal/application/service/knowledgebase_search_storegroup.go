@@ -204,7 +204,7 @@ func (s *knowledgeBaseService) authorizeKBAccess(
 	ctx context.Context,
 	kbs []*types.KnowledgeBase,
 ) error {
-	return access.AuthorizeKBAccess(ctx, s.kbShareService, kbs)
+	return access.AuthorizeKBAccess(ctx, s.kbShareService, s.userKBGrants, kbs)
 }
 
 // validateSameEmbeddingModel rejects multi-KB searches that span more than

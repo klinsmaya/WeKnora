@@ -416,3 +416,15 @@ func embedFrameAncestorsMiddleware(svc interfaces.EmbedChannelService) gin.Handl
 		c.Next()
 	}
 }
+
+// RegisterKBUserGrantRoutes serves one user's grant on one knowledge base.
+// A nil handler leaves the routes unregistered so partial routers still start.
+func RegisterKBUserGrantRoutes(r *gin.RouterGroup, grantHandler *handler.KBUserGrantHandler, g *rbacGuards) {
+	if grantHandler == nil {
+		return
+	}
+	kbGrants := g.apiKeyGroup(r.Group("/knowledge-bases/:id/grants"), apiKeyFullAccess())
+	kbGrants.PUT("/:user_id", g.OwnedKBOrAdmin(), grantHandler.Upsert)
+	kbGrants.GET("", g.OwnedKBOrAdmin(), grantHandler.List)
+	kbGrants.DELETE("/:user_id", g.OwnedKBOrAdmin(), grantHandler.Revoke)
+}

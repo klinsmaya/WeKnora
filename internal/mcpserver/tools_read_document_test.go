@@ -58,7 +58,7 @@ func newMCPReadDocumentEngine(t *testing.T, contents []string) *gin.Engine {
 	srv := NewServer(
 		&stubKBService{kbs: map[string]*types.KnowledgeBase{kb.ID: kb}},
 		&stubKnowledgeService{docs: map[string]*types.Knowledge{doc.ID: doc}},
-		&mcpReadChunkService{repo: repo}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		&mcpReadChunkService{repo: repo}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	ep := &types.MCPEndpoint{
 		ID: "ep-1", TenantID: 1, Enabled: true, KnowledgeBaseIDs: types.StringArray{kb.ID},
