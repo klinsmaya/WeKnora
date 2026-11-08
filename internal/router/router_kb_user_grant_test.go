@@ -26,6 +26,19 @@ func TestKBUserGrantHTTPContract(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "grants.db")), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`
+CREATE TABLE IF NOT EXISTS kb_user_grant_sources (
+    knowledge_base_id VARCHAR(36) NOT NULL,
+    recipient_user_id VARCHAR(36) NOT NULL,
+    source VARCHAR(96) NOT NULL,
+    permission VARCHAR(32) NOT NULL,
+    granted_by_user_id VARCHAR(36) NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    PRIMARY KEY (knowledge_base_id, recipient_user_id, source),
+    CHECK (permission IN ('viewer', 'editor'))
+);
+CREATE INDEX IF NOT EXISTS idx_kb_user_grant_sources_recipient ON kb_user_grant_sources(recipient_user_id);
+
 CREATE TABLE IF NOT EXISTS kb_user_grants (
     knowledge_base_id VARCHAR(36) NOT NULL,
     recipient_user_id VARCHAR(36) NOT NULL,
@@ -134,6 +147,14 @@ CREATE TABLE IF NOT EXISTS kb_user_grants (
 		engine.ServeHTTP(rec, req)
 		return rec
 	}
+	scoped := put("/api/v1/knowledge-bases/kb-1/grants/user-a/sources/portal-test", `{"permission":"viewer"}`)
+	require.Equal(t, http.StatusOK, scoped.Code, scoped.Body.String())
+	require.Contains(t, scoped.Body.String(), `"source":"portal-test"`)
+	scopedDelete := del("/api/v1/knowledge-bases/kb-1/grants/user-a/sources/portal-test")
+	require.Equal(t, http.StatusOK, scopedDelete.Code, scopedDelete.Body.String())
+	var direct kbusergrant.KBUserGrant
+	require.NoError(t, db.Where("knowledge_base_id = ? AND recipient_user_id = ?", "kb-1", "user-a").Take(&direct).Error)
+	require.Equal(t, kbusergrant.PermissionEditor, direct.Permission)
 	firstDelete := del("/api/v1/knowledge-bases/kb-1/grants/user-a")
 	require.Equal(t, http.StatusOK, firstDelete.Code, firstDelete.Body.String())
 	require.Contains(t, firstDelete.Body.String(), `"success":true`)
