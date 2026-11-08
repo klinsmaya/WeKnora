@@ -417,8 +417,6 @@ func embedFrameAncestorsMiddleware(svc interfaces.EmbedChannelService) gin.Handl
 	}
 }
 
-// RegisterKBUserGrantRoutes serves one user's grant on one knowledge base.
-// A nil handler leaves the routes unregistered so partial routers still start.
 func RegisterKBUserGrantRoutes(r *gin.RouterGroup, grantHandler *handler.KBUserGrantHandler, g *rbacGuards) {
 	if grantHandler == nil {
 		return

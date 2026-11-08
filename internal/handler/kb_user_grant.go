@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// KBUserGrantHandler serves personal knowledge-base grants.
 type KBUserGrantHandler struct {
 	grants *kbusergrant.Service
 }

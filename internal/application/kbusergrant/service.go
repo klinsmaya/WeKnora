@@ -24,11 +24,8 @@ var (
 	ErrForbidden             = errors.New("knowledge base grant forbidden")
 )
 
-// KBUserGrantPermission is the stored permission. Only viewer and editor are valid.
 type KBUserGrantPermission string
 
-// KBUserGrant is one person's access to one knowledge base.
-// The primary key is (KnowledgeBaseID, RecipientUserID).
 type KBUserGrant struct {
 	KnowledgeBaseID string                `json:"knowledge_base_id" gorm:"primaryKey;type:varchar(36)"`
 	RecipientUserID string                `json:"recipient_user_id" gorm:"primaryKey;type:varchar(36)"`
@@ -40,7 +37,6 @@ type KBUserGrant struct {
 
 func (KBUserGrant) TableName() string { return "kb_user_grants" }
 
-// ParsePermission accepts viewer or editor and rejects every other value, including admin.
 func ParsePermission(raw string) (KBUserGrantPermission, error) {
 	switch KBUserGrantPermission(strings.TrimSpace(raw)) {
 	case PermissionViewer, PermissionEditor:
@@ -59,8 +55,6 @@ type userLookup interface {
 	GetUserByID(ctx context.Context, id string) (*types.User, error)
 }
 
-// Service is the personal grant boundary. Management writes rows. Effective and
-// CardsForUser are the read path shared with access checks.
 type Service struct {
 	db    *gorm.DB
 	kbs   kbLookup
