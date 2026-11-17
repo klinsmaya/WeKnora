@@ -41,6 +41,7 @@ type mcpEndpointService struct {
 	repo           interfaces.MCPEndpointRepository
 	kbService      interfaces.KnowledgeBaseService
 	kbShareService interfaces.KBShareService
+	userKBGrants   access.UserKBGrantLookup
 	agentService   interfaces.CustomAgentService
 }
 
@@ -50,11 +51,13 @@ func NewMCPEndpointService(
 	kbService interfaces.KnowledgeBaseService,
 	kbShareService interfaces.KBShareService,
 	agentService interfaces.CustomAgentService,
+	userKBGrants access.UserKBGrantLookup,
 ) interfaces.MCPEndpointService {
 	return &mcpEndpointService{
 		repo:           repo,
 		kbService:      kbService,
 		kbShareService: kbShareService,
+		userKBGrants:   userKBGrants,
 		agentService:   agentService,
 	}
 }
@@ -337,7 +340,7 @@ func (s *mcpEndpointService) validateKnowledgeBases(
 			return nil, apperrors.NewNotFoundError("knowledge base not found: " + id)
 		}
 		if _, err := access.ResolveKB(ctx, access.KBRequest{Caller: caller}, kb,
-			types.OrgRoleViewer, s.kbShareService, nil); err != nil {
+			types.OrgRoleViewer, s.kbShareService, nil, s.userKBGrants); err != nil {
 			return nil, apperrors.NewNotFoundError("knowledge base not found: " + id)
 		}
 		seen[id] = struct{}{}

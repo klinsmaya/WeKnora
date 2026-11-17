@@ -14,6 +14,7 @@ import (
 	"go.uber.org/dig"
 
 	"github.com/Tencent/WeKnora/internal/agent/operations"
+	"github.com/Tencent/WeKnora/internal/application/access"
 	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/handler"
@@ -43,6 +44,8 @@ type RouterParams struct {
 	EvaluationService            interfaces.EvaluationService
 	KBShareService               interfaces.KBShareService
 	AgentShareService            interfaces.AgentShareService
+	UserKBGrants                 access.UserKBGrantLookup
+	KBUserGrantHandler           *handler.KBUserGrantHandler
 	KBHandler                    *handler.KnowledgeBaseHandler
 	GraphSearchHandler           *handler.GraphSearchHandler
 	KnowledgeHandler             *handler.KnowledgeHandler
@@ -252,6 +255,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 			params.ChunkService,
 			params.KBShareService,
 			params.AgentShareService,
+			params.UserKBGrants,
 		)
 
 		// API-key gate: single authority for X-API-Key principals. Runs
@@ -326,6 +330,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterUserFavoriteRoutes(v1, params.UserFavoriteHandler, rbacGuards)
 		RegisterSkillRoutes(v1, params.SkillHandler, rbacGuards)
 		RegisterOrganizationRoutes(v1, params.OrganizationHandler, rbacGuards)
+		RegisterKBUserGrantRoutes(v1, params.KBUserGrantHandler, rbacGuards)
 		RegisterIMChannelRoutes(v1, params.IMHandler, rbacGuards)
 		RegisterEmbedChannelRoutes(v1, params.EmbedChannelHandler, rbacGuards)
 		RegisterMCPEndpointRoutes(v1, params.MCPEndpointHandler, rbacGuards)

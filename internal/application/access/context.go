@@ -63,15 +63,17 @@ type KBPermissions struct {
 	ctx    context.Context
 	caller types.Caller
 	shares *KBSharePermissions
+	grants UserKBGrantLookup
 }
 
 // NewKBPermissions resolves reads for one caller and operation.
-func NewKBPermissions(ctx context.Context, shares KBShareLookup) *KBPermissions {
+func NewKBPermissions(ctx context.Context, shares KBShareLookup, grants UserKBGrantLookup) *KBPermissions {
 	caller := types.CallerFromContext(ctx)
 	return &KBPermissions{
 		ctx:    ctx,
 		caller: caller,
 		shares: NewKBSharePermissions(ctx, shares, caller.TenantID, caller.Role),
+		grants: grants,
 	}
 }
 
@@ -90,5 +92,16 @@ func (p *KBPermissions) Check(kbID string, ownerTenantID uint64, required types.
 	if p.caller.TenantID == 0 || p.caller.TenantID == ownerTenantID {
 		return false, nil
 	}
-	return p.shares.Check(kbID, required)
+	allowed, err := p.shares.Check(kbID, required)
+	if err != nil || allowed {
+		return allowed, err
+	}
+	if p.grants == nil || p.caller.UserID == "" {
+		return false, nil
+	}
+	role, ok, grantErr := p.grants.Effective(p.ctx, kbID, p.caller)
+	if grantErr != nil {
+		return false, grantErr
+	}
+	return ok && role.HasPermission(required), nil
 }

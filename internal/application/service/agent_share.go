@@ -345,7 +345,7 @@ func (s *agentShareService) ListSharedAgents(ctx context.Context, tenantID uint6
 			continue
 		}
 		effective := types.MinOrgRole(share.Permission, tm.Role)
-		effective = applyTenantRoleCap(effective, callerTenantRole)
+		effective = types.CapOrgRoleByTenantRole(effective, callerTenantRole)
 		info := s.sharedAgentInfo(ctx, share, effective, webSearchReadyCache)
 		info.Agent = receiverAgentView(info.Agent)
 		key := fmt.Sprintf("%s_%d", share.AgentID, share.SourceTenantID)
@@ -405,7 +405,7 @@ func (s *agentShareService) ListSharedAgentsInOrganization(ctx context.Context, 
 		}
 
 		effective := types.MinOrgRole(share.Permission, tm.Role)
-		effective = applyTenantRoleCap(effective, callerTenantRole)
+		effective = types.CapOrgRoleByTenantRole(effective, callerTenantRole)
 
 		info := s.sharedAgentInfo(ctx, share, effective, webSearchReadyCache)
 		if share.SourceTenantID != tenantID {
@@ -471,7 +471,7 @@ func (s *agentShareService) ListSharedAgentsInOrganizations(ctx context.Context,
 				continue
 			}
 			effective := types.MinOrgRole(share.Permission, tm.Role)
-			effective = applyTenantRoleCap(effective, callerTenantRole)
+			effective = types.CapOrgRoleByTenantRole(effective, callerTenantRole)
 			info := s.sharedAgentInfo(ctx, share, effective, webSearchReadyCache)
 			if share.SourceTenantID != tenantID {
 				info.Agent = receiverAgentView(info.Agent)

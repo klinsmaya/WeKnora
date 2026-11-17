@@ -23,6 +23,7 @@ import (
 func AuthorizeKBAccess(
 	ctx context.Context,
 	shares KBShareLookup,
+	grants UserKBGrantLookup,
 	kbs []*types.KnowledgeBase,
 ) error {
 	if len(kbs) == 0 {
@@ -38,7 +39,7 @@ func AuthorizeKBAccess(
 	}
 
 	requestTenantID := types.CallerFromContext(ctx).TenantID
-	permissions := NewKBPermissions(ctx, shares)
+	permissions := NewKBPermissions(ctx, shares, grants)
 
 	for _, kb := range kbs {
 		hasPermission, permErr := permissions.Check(kb.ID, kb.TenantID, types.OrgRoleViewer)

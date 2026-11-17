@@ -76,7 +76,7 @@ func TestUpdateKnowledgeBaseVLMConfigRequiresSettingsAccess(t *testing.T) {
 				c.Next()
 			})
 			r.PUT("/:id", middleware.RequireKBAccess(
-				middleware.KBIDFromParam("id"), types.OrgRoleEditor, svc, shares, nil,
+				middleware.KBIDFromParam("id"), types.OrgRoleEditor, svc, shares, nil, nil,
 				&config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}},
 			), h.UpdateKnowledgeBase)
 

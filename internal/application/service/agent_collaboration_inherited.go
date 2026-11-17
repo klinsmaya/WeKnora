@@ -131,7 +131,7 @@ func (s *sessionService) restoreInheritedConfig(
 	// Independent conversations keep their own follow-up history even if the
 	// source template disables history for ordinary end-user conversations.
 	cfg.MultiTurnEnabled = true
-	permissions := kbReadPermissions(ctx, s.kbShareService)
+	permissions := kbReadPermissions(ctx, s.kbShareService, s.userKBGrants)
 	for _, target := range cfg.SearchTargets {
 		if target == nil {
 			return nil, errors.New("invalid inherited search target")
@@ -152,7 +152,7 @@ func (s *sessionService) restoreInheritedConfig(
 		}
 	}
 	roleEnforced := s.cfg != nil && s.cfg.Tenant.IsRBACEnforced()
-	writable := kbWritableIDs(ctx, s.kbShareService, cfg.SearchTargets, roleEnforced)
+	writable := kbWritableIDs(ctx, s.kbShareService, s.userKBGrants, cfg.SearchTargets, roleEnforced)
 	for _, id := range snapshot.WritableKBIDs {
 		if slices.Contains(writable, id) {
 			cfg.WritableKBIDs = append(cfg.WritableKBIDs, id)

@@ -57,6 +57,13 @@ func MinOrgRole(a, b OrgMemberRole) OrgMemberRole {
 	return a
 }
 
+func CapOrgRoleByTenantRole(stored OrgMemberRole, callerTenantRole TenantRole) OrgMemberRole {
+	if callerTenantRole == TenantRoleViewer && stored.HasPermission(OrgRoleEditor) {
+		return OrgRoleViewer
+	}
+	return stored
+}
+
 // Organization represents a collaboration organization for cross-tenant sharing
 type Organization struct {
 	// Unique identifier of the organization

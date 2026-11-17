@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Tencent/WeKnora/internal/application/access"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/ratelimit"
@@ -50,6 +51,7 @@ type Server struct {
 	messageService   interfaces.MessageService
 	agentService     interfaces.CustomAgentService
 	kbShareService   interfaces.KBShareService
+	userKBGrants     access.UserKBGrantLookup
 	tenantService    interfaces.TenantService
 	resourceCatalog  interfaces.ResourceCatalog
 	fileService      interfaces.FileService
@@ -83,6 +85,7 @@ func NewServer(
 	resourceCatalog interfaces.ResourceCatalog,
 	fileService interfaces.FileService,
 	storageResolver interfaces.StorageBackendResolver,
+	userKBGrants access.UserKBGrantLookup,
 ) *Server {
 	s := &Server{
 		kbService:        kbService,
@@ -93,6 +96,7 @@ func NewServer(
 		messageService:   messageService,
 		agentService:     agentService,
 		kbShareService:   kbShareService,
+		userKBGrants:     userKBGrants,
 		tenantService:    tenantService,
 		endpointRepo:     endpointRepo,
 		db:               db,

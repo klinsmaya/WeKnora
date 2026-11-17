@@ -100,7 +100,7 @@ func TestAskReportsFailuresAfterPartialAnswer(t *testing.T) {
 				}}
 				agents := &stubAgentService{agents: map[string]*types.CustomAgent{agent.ID: agent}}
 				srv := NewServer(kbs, nil, nil, nil, sessions, messages, agents, nil,
-					nil, nil, nil, nil, nil, nil, nil, nil)
+					nil, nil, nil, nil, nil, nil, nil, nil, nil)
 				ep := &types.MCPEndpoint{
 					ID: "ep-1", TenantID: 1, Enabled: true, RateLimitPerMinute: 100,
 					DefaultAgentID: agent.ID, KnowledgeBaseIDs: types.StringArray{"kb-1"},

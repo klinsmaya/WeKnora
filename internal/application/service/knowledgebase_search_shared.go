@@ -40,7 +40,7 @@ func (s *knowledgeBaseService) fetchKnowledgeDataWithShared(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	permissions := kbReadPermissions(ctx, s.kbShareService)
+	permissions := kbReadPermissions(ctx, s.kbShareService, s.userKBGrants)
 	knowledgeMap := make(map[string]*types.Knowledge, len(rows))
 	appendAllowed := func(k *types.Knowledge) {
 		if k == nil {
@@ -79,7 +79,7 @@ func (s *knowledgeBaseService) listChunksByIDWithShared(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	permissions := kbReadPermissions(ctx, s.kbShareService)
+	permissions := kbReadPermissions(ctx, s.kbShareService, s.userKBGrants)
 	chunks := make([]*types.Chunk, 0, len(rows))
 	foundSet := make(map[string]bool)
 	appendAllowed := func(c *types.Chunk) {

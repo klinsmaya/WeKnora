@@ -40,6 +40,7 @@ type customAgentService struct {
 	chunkRepo      interfaces.ChunkRepository
 	kbService      interfaces.KnowledgeBaseService
 	kbShareService interfaces.KBShareService
+	userKBGrants   access.UserKBGrantLookup
 	wikiPageRepo   interfaces.WikiPageRepository
 	tagRepo        interfaces.KnowledgeTagRepository
 	knowledgeRepo  interfaces.KnowledgeRepository
@@ -56,12 +57,14 @@ func NewCustomAgentService(
 	tagRepo interfaces.KnowledgeTagRepository,
 	knowledgeRepo interfaces.KnowledgeRepository,
 	agentShareRepo interfaces.AgentShareRepository,
+	userKBGrants access.UserKBGrantLookup,
 ) interfaces.CustomAgentService {
 	return &customAgentService{
 		repo:           repo,
 		chunkRepo:      chunkRepo,
 		kbService:      kbService,
 		kbShareService: kbShareService,
+		userKBGrants:   userKBGrants,
 		wikiPageRepo:   wikiPageRepo,
 		tagRepo:        tagRepo,
 		knowledgeRepo:  knowledgeRepo,
@@ -1146,7 +1149,7 @@ func (s *customAgentService) readableSuggestionKnowledgeIDs(ctx context.Context,
 	if len(knowledgeIDs) > maxSuggestionKnowledgeIDs {
 		knowledgeIDs = knowledgeIDs[:maxSuggestionKnowledgeIDs]
 	}
-	permissions := access.NewKBPermissions(ctx, s.kbShareService)
+	permissions := access.NewKBPermissions(ctx, s.kbShareService, s.userKBGrants)
 	readable := make([]string, 0, len(knowledgeIDs))
 	for _, id := range knowledgeIDs {
 		knowledge, err := s.knowledgeRepo.GetKnowledgeByIDOnly(ctx, id)
@@ -1224,7 +1227,7 @@ func (s *customAgentService) groupKBIDsByEffectiveTenant(
 			kbByID[kb.ID] = kb
 		}
 	}
-	permissions := access.NewKBPermissions(ctx, s.kbShareService)
+	permissions := access.NewKBPermissions(ctx, s.kbShareService, s.userKBGrants)
 	for _, kbID := range kbIDs {
 		kb := kbByID[kbID]
 		if kb == nil {

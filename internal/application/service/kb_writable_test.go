@@ -38,19 +38,42 @@ func TestKBWritableIDs(t *testing.T) {
 	}
 
 	require.Equal(t, []string{"own", "shared-editor"},
-		kbWritableIDs(caller(types.TenantRoleContributor, "u"), shares, targets, true))
-	require.Equal(t, []string{"own"}, kbWritableIDs(caller(types.TenantRoleContributor, ""), shares, targets, true),
+		kbWritableIDs(caller(types.TenantRoleContributor, "u"), shares, nil, targets, true))
+	require.Equal(t, []string{"own"}, kbWritableIDs(caller(types.TenantRoleContributor, ""), shares, nil, targets, true),
 		"callers without a user do not expand through org shares")
 
 	// A tenant Viewer (also the IM / embed / MCP endpoint principals) is
 	// read-only, like on the HTTP write routes; with RBAC enforcement off the
 	// role check only logs, but a share never grants a Viewer more than read.
-	require.Empty(t, kbWritableIDs(caller(types.TenantRoleViewer, "u"), shares, targets, true))
-	require.Equal(t, []string{"own"}, kbWritableIDs(caller(types.TenantRoleViewer, "u"), shares, targets, false))
+	require.Empty(t, kbWritableIDs(caller(types.TenantRoleViewer, "u"), shares, nil, targets, true))
+	require.Equal(t, []string{"own"}, kbWritableIDs(caller(types.TenantRoleViewer, "u"), shares, nil, targets, false))
 
 	// Scoped API keys write only with the ingest capability.
 	chatOnly := types.TenantAPIKeyScope{Capabilities: types.StringArray{string(types.APIKeyCapabilityChat)}}
-	require.Empty(t, kbWritableIDs(apiKey(chatOnly), shares, targets, true))
+	require.Empty(t, kbWritableIDs(apiKey(chatOnly), shares, nil, targets, true))
 	ingest := types.TenantAPIKeyScope{Capabilities: types.StringArray{string(types.APIKeyCapabilityIngest)}}
-	require.Equal(t, []string{"own"}, kbWritableIDs(apiKey(ingest), shares, targets, true))
+	require.Equal(t, []string{"own"}, kbWritableIDs(apiKey(ingest), shares, nil, targets, true))
+}
+
+type personalGrantLookup map[string]types.OrgMemberRole
+
+func (g personalGrantLookup) Effective(_ context.Context, kbID string, _ types.Caller) (types.OrgMemberRole, bool, error) {
+	role, ok := g[kbID]
+	return role, ok, nil
+}
+
+func TestKBWritableIDsPersonalGrant(t *testing.T) {
+	targets := types.SearchTargets{
+		{KnowledgeBaseID: "granted-editor", TenantID: 7},
+		{KnowledgeBaseID: "granted-viewer", TenantID: 7},
+		{KnowledgeBaseID: "other", TenantID: 7},
+	}
+	ctx := types.WithCaller(context.Background(), types.Caller{
+		TenantID: 42, UserID: "u", Role: types.TenantRoleContributor,
+	})
+	grants := personalGrantLookup{
+		"granted-editor": types.OrgRoleEditor,
+		"granted-viewer": types.OrgRoleViewer,
+	}
+	require.Equal(t, []string{"granted-editor"}, kbWritableIDs(ctx, nil, grants, targets, true))
 }
