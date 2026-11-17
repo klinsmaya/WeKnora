@@ -124,12 +124,12 @@ func newGrantFixture(t *testing.T) *grantFixture {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
 	dialect := "sqlite"
-	version := "000053"
-	sourcesVersion := "000054"
+	version := "000054"
+	sourcesVersion := "000055"
 	if db.Dialector.Name() == "postgres" {
 		dialect = "versioned"
-		version = "000137"
-		sourcesVersion = "000138"
+		version = "000138"
+		sourcesVersion = "000139"
 	}
 	root := moduleRoot(t)
 	original, err := os.ReadFile(filepath.Join(root, "migrations", dialect, version+"_kb_user_grants.up.sql"))

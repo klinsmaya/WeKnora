@@ -28,8 +28,8 @@ func moduleRoot(t *testing.T) string {
 func TestKBUserGrantMigrationContract(t *testing.T) {
 	root := moduleRoot(t)
 	for _, rel := range []string{
-		"migrations/versioned/000137_kb_user_grants.up.sql",
-		"migrations/sqlite/000053_kb_user_grants.up.sql",
+		"migrations/versioned/000138_kb_user_grants.up.sql",
+		"migrations/sqlite/000054_kb_user_grants.up.sql",
 	} {
 		t.Run(rel, func(t *testing.T) {
 			body, err := os.ReadFile(filepath.Join(root, rel))
@@ -41,8 +41,8 @@ func TestKBUserGrantMigrationContract(t *testing.T) {
 		})
 	}
 	for _, rel := range []string{
-		"migrations/versioned/000137_kb_user_grants.down.sql",
-		"migrations/sqlite/000053_kb_user_grants.down.sql",
+		"migrations/versioned/000138_kb_user_grants.down.sql",
+		"migrations/sqlite/000054_kb_user_grants.down.sql",
 	} {
 		t.Run(rel, func(t *testing.T) {
 			body, err := os.ReadFile(filepath.Join(root, rel))
